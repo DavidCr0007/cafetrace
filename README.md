@@ -29,15 +29,18 @@ python -m venv .venv  # primera instalación solamente
 cd backend
 source ../.venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env  # solo si aún no existe backend/.env
+test -f .env || cp .env.example .env
 alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
 API: `http://localhost:8000`.
 
-El ejemplo usa PostgreSQL. Para una ejecución local sin PostgreSQL, configura
-`DATABASE_URL=sqlite:///./cafetrace.db` en `backend/.env` antes de ejecutar las migraciones.
+El archivo de ejemplo usa PostgreSQL. Para desarrollo local sin PostgreSQL,
+conserva `backend/.env` y verifica que contenga
+`DATABASE_URL=sqlite:///./cafetrace.db` antes de ejecutar las migraciones.
+No ejecutes `cp .env.example .env` si el archivo ya existe: sobrescribiría la
+configuración local y volvería a apuntar la aplicación a PostgreSQL.
 
 ```bash
 curl http://localhost:8000/health

@@ -11,7 +11,7 @@ python -m venv ../.venv
 source ../.venv/bin/activate       # Linux/macOS
 ..\.venv\Scripts\activate         # Windows PowerShell
 pip install -r requirements.txt
-cp .env.example .env
+test -f .env || cp .env.example .env
 ```
 
 Configura `DATABASE_URL`, `SECRET_KEY`, CORS y, si aplica, las variables blockchain. SQLite sirve para desarrollo; PostgreSQL es el destino de integración/producción.
