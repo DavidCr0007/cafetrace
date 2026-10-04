@@ -26,8 +26,8 @@ Desde la raíz:
 
 ```bash
 python -m venv .venv  # primera instalación solamente
-source ../.venv/bin/activate
 cd backend
+source ../.venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env  # solo si aún no existe backend/.env
 alembic upgrade head
