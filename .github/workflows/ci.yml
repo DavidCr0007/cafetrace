@@ -1,14 +1,57 @@
 name: CI
 on: [push, pull_request]
+
+permissions:
+  contents: read
+
 jobs:
   backend:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: cafetrace
+          POSTGRES_PASSWORD: cafetrace_ci_password
+          POSTGRES_DB: cafetrace_ci
+        options: >-
+          --health-cmd "pg_isready -U cafetrace -d cafetrace_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
+    env:
+      DATABASE_URL: postgresql://cafetrace:cafetrace_ci_password@localhost:5432/cafetrace_ci
+      SECRET_KEY: ci-only-secret-key-not-for-production-000000
+      ENVIRONMENT: test
+      CORS_ORIGINS: '["http://localhost:3000"]'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }
-      - run: pip install -r backend/requirements.txt
-      - run: cd backend && DATABASE_URL=sqlite:///./ci.db alembic upgrade head && DATABASE_URL=sqlite:///./ci.db alembic check && DATABASE_URL=sqlite:///./ci.db pytest -q
+      - run: pip install -r backend/requirements.txt bandit pip-audit
+      - run: cd backend && alembic upgrade head && alembic check && alembic downgrade base && alembic upgrade head
+      - run: cd backend && pytest --cov=app --cov-report=term-missing --cov-report=xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-coverage
+          path: backend/coverage.xml
+      - run: bandit -r backend/app -ll
+      - run: pip-audit -r backend/requirements.txt
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Reject .git-new in history
+        run: test -z "$(git log --all --format=%H -- .git-new)"
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   frontend:
     runs-on: ubuntu-latest
     steps:

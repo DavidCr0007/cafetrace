@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.permissions import Permission, require_permission
@@ -8,7 +10,7 @@ from app.models.operations import CompensationRule, OrderSettlement, PayrollEntr
 from app.models.user import User
 from app.schemas.finance import CompensationRuleCreate, PayrollCreate, SettlementCostInput
 from app.services.audit import write_audit
-from app.services.finance import calculate_settlement, payroll_preview
+from app.services.finance import calculate_settlement, money, payroll_preview
 
 router = APIRouter()
 
@@ -48,26 +50,38 @@ def create_rule(payload: CompensationRuleCreate, db: Session = Depends(get_db), 
 
 @router.post("/orders/{order_id}/settlement")
 def calculate_order_settlement(order_id: int, payload: SettlementCostInput, db: Session = Depends(get_db), accountant: User = Depends(require_permission(Permission.ACCOUNTING_WRITE))):
-    order = db.query(Order).filter(Order.id == order_id).first()
+    # El bloqueo protege PostgreSQL; la restricción UNIQUE y el manejo de
+    # IntegrityError cubren la carrera equivalente en SQLite y entre réplicas.
+    if db.bind and db.bind.dialect.name == "sqlite":
+        # SQLite no implementa SELECT ... FOR UPDATE. Esta transacción adquiere
+        # el bloqueo de escritura antes de consultar la liquidación existente.
+        db.execute(text("BEGIN IMMEDIATE"))
+    order = db.query(Order).filter(Order.id == order_id).with_for_update().first()
     if not order:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
+    if order.status == "cancelled":
+        raise HTTPException(status_code=409, detail="No se puede liquidar un pedido cancelado")
     settlement = db.query(OrderSettlement).filter(OrderSettlement.order_id == order_id).first()
     if settlement:
-        settlement.allocations.clear()
-    else:
-        settlement = None
-    new_settlement, _ = calculate_settlement(db, order, payload.logistics_cost)
-    if settlement:
-        for field in ("gross_sales", "direct_cost", "logistics_cost", "producer_payout", "seller_commission", "platform_margin", "status"):
-            setattr(settlement, field, getattr(new_settlement, field))
-        settlement.allocations = new_settlement.allocations
-    else:
-        settlement = new_settlement
+        if money(settlement.logistics_cost) != money(payload.logistics_cost):
+            raise HTTPException(status_code=409, detail="El pedido ya tiene una liquidación con costos distintos")
+        return settlement
+
+    try:
+        settlement, _ = calculate_settlement(db, order, payload.logistics_cost)
         db.add(settlement)
-    write_audit(db, "accounting.order_settlement_calculated", "order", str(order_id), accountant, {"platform_margin": str(settlement.platform_margin), "status": settlement.status})
-    db.commit()
-    db.refresh(settlement)
-    return settlement
+        # Ejecutar INSERT ahora permite capturar la carrera antes de auditar.
+        db.flush()
+        write_audit(db, "accounting.order_settlement_calculated", "order", str(order_id), accountant, {"platform_margin": str(settlement.platform_margin), "status": settlement.status})
+        db.commit()
+        db.refresh(settlement)
+        return settlement
+    except IntegrityError:
+        db.rollback()
+        settlement = db.query(OrderSettlement).filter(OrderSettlement.order_id == order_id).first()
+        if settlement and money(settlement.logistics_cost) == money(payload.logistics_cost):
+            return settlement
+        raise HTTPException(status_code=409, detail="El pedido ya fue liquidado con costos distintos")
 
 
 @router.get("/orders/{order_id}/settlement")

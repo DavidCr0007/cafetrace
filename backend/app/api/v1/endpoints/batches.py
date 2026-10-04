@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from app.core.database import get_db
-from app.api.deps import get_current_producer
+from app.api.deps import get_current_producer, get_current_user
+from app.core.permissions import Permission, has_permission
 from app.models.user import User as UserModel
 from app.models.batch import Batch as BatchModel
 from app.models.product import Product as ProductModel
@@ -14,6 +15,18 @@ from app.models.traceability import BlockchainNotarization
 from app.services.audit import write_audit
 
 router = APIRouter()
+
+
+def _internal_batch_access(batch: BatchModel, current_user: UserModel) -> None:
+    """Protege telemetría y metadatos operativos contra IDOR entre productores."""
+    if current_user.role.value == "admin":
+        return
+    if current_user.role.value == "auditor" and has_permission(current_user, Permission.TRACEABILITY_READ):
+        return
+    if current_user.role.value == "producer" and batch.producer_id == current_user.id:
+        return
+    # 404 evita revelar si un lote ajeno existe.
+    raise HTTPException(status_code=404, detail="Lote no encontrado")
 
 @router.post("", response_model=Batch, include_in_schema=False)
 @router.post("/", response_model=Batch)
@@ -28,15 +41,30 @@ def create_batch(batch: BatchCreate, db: Session = Depends(get_db), current_user
 
 @router.get("", response_model=List[Batch], include_in_schema=False)
 @router.get("/", response_model=List[Batch])
-def read_batches(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    batches = db.query(BatchModel).offset(skip).limit(limit).all()
+def read_batches(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
+):
+    if current_user.role.value in {"admin", "auditor"}:
+        batches = db.query(BatchModel).offset(skip).limit(limit).all()
+    elif current_user.role.value == "producer":
+        batches = db.query(BatchModel).filter(BatchModel.producer_id == current_user.id).offset(skip).limit(limit).all()
+    else:
+        raise HTTPException(status_code=403, detail="No autorizado para consultar lotes operativos")
     return batches
 
 @router.get("/{batch_id}", response_model=Batch)
-def read_batch(batch_id: int, db: Session = Depends(get_db)):
+def read_batch(
+    batch_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
+):
     batch = db.query(BatchModel).filter(BatchModel.id == batch_id).first()
     if batch is None:
         raise HTTPException(status_code=404, detail="Batch not found")
+    _internal_batch_access(batch, current_user)
     return batch
 
 # Traceability endpoints related to batches
@@ -56,7 +84,15 @@ def create_batch_record(batch_id: int, record: TraceabilityRecordCreate, db: Ses
     return db_record
 
 @router.get("/{batch_id}/records", response_model=List[TraceabilityRecord])
-def read_batch_records(batch_id: int, db: Session = Depends(get_db)):
+def read_batch_records(
+    batch_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
+):
+    batch = db.query(BatchModel).filter(BatchModel.id == batch_id).first()
+    if not batch:
+        raise HTTPException(status_code=404, detail="Lote no encontrado")
+    _internal_batch_access(batch, current_user)
     records = db.query(TraceabilityModel).filter(TraceabilityModel.batch_id == batch_id).all()
     return records
 

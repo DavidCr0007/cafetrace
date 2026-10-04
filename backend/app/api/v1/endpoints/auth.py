@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 import secrets
 from typing import Any
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import create_access_token, verify_password, get_password_hash, hash_access_code
+from app.core.rate_limit import clear_auth_rate_limit, enforce_auth_rate_limit
 from app.models.user import User as UserModel, UserRole
 from app.schemas.token import Token
 from app.schemas.user import User, UserCreate, PasswordResetRequestCreate
@@ -23,6 +24,7 @@ class LoginJSON(BaseModel):
 
 @router.post("/login/access-token", response_model=Token)
 def login_access_token(
+    request: Request,
     db: Session = Depends(get_db),
     form_data: OAuth2PasswordRequestForm = Depends()
 ) -> Any:
@@ -30,6 +32,7 @@ def login_access_token(
     OAuth2 compatible token login, get an access token for future requests (used by Swagger UI).
     Note: form_data.username contains the email.
     """
+    enforce_auth_rate_limit(request, "oauth_login")
     user = db.query(UserModel).filter(UserModel.email == form_data.username).first()
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
@@ -41,6 +44,7 @@ def login_access_token(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Inactive user"
         )
+    clear_auth_rate_limit(request, "oauth_login")
     write_audit(db, "auth.login", "user", str(user.id), user, {"method": "oauth2"})
     db.commit()
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -54,11 +58,13 @@ def login_access_token(
 @router.post("/login", response_model=Token)
 def login_json(
     login_data: LoginJSON,
+    request: Request,
     db: Session = Depends(get_db)
 ) -> Any:
     """
     JSON-based login endpoint for web and mobile frontends.
     """
+    enforce_auth_rate_limit(request, "json_login")
     user = db.query(UserModel).filter(UserModel.email == login_data.email).first()
     if not user or not verify_password(login_data.password, user.hashed_password):
         raise HTTPException(
@@ -70,6 +76,7 @@ def login_json(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Inactive user"
         )
+    clear_auth_rate_limit(request, "json_login")
     write_audit(db, "auth.login", "user", str(user.id), user, {"method": "json"})
     db.commit()
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -111,9 +118,11 @@ def register_user(
 @router.post("/password-reset/request")
 def request_password_reset(
     request: PasswordResetRequestCreate,
+    http_request: Request,
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
     """Creates a pending request; response does not reveal whether an account exists."""
+    enforce_auth_rate_limit(http_request, "password_reset")
     if not request.email and not request.access_code:
         raise HTTPException(status_code=422, detail="Debe enviar correo o código de acceso")
     user = None

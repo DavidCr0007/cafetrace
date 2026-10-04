@@ -32,7 +32,13 @@ pip install -r requirements.txt
 test -f .env || cp .env.example .env
 alembic upgrade head
 uvicorn app.main:app --reload
+
+# Para reiniciar el backend
+pkill -f "uvicorn app.main:app"
+# Iniciar backend
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
+
 
 API: `http://localhost:8000`.
 
@@ -120,7 +126,14 @@ npm run build
 - `BLOCKCHAIN_PRIVATE_KEY` nunca debe llegar al frontend ni versionarse.
 - `DATABASE_URL` define la base usada por Alembic y FastAPI.
 - `NEXT_PUBLIC_API_URL` debe apuntar al backend accesible desde el navegador.
+- `ENVIRONMENT=production` exige una `SECRET_KEY` de al menos 32 caracteres y una allowlist `CORS_ORIGINS` sin comodines ni orígenes locales.
 - La notarización permanece desactivada hasta configurar RPC, contrato y clave.
+- Login, OAuth y recuperación se limitan a 5 intentos por IP cada 60 segundos de forma predeterminada; ajusta `AUTH_RATE_LIMIT_ATTEMPTS` y `AUTH_RATE_LIMIT_WINDOW_SECONDS` por entorno.
+
+El historial debe pasar el gate de CI que rechaza `.git-new`. Si se necesita
+limpiar una rama ya publicada, crea un respaldo, reescribe todas sus
+referencias y publica el nuevo hash con `--force-with-lease`; rota cualquier
+credencial que haya existido en el historial antes de publicar.
 
 ## Docker Compose
 
@@ -130,7 +143,10 @@ Copiar `.env.example` a `.env` y reemplazar `POSTGRES_PASSWORD` y `SECRET_KEY`:
 docker compose up --build
 ```
 
-Backend: `8000`; frontend: `3000`; PostgreSQL: `5432`.
+Backend: `8000`; frontend: `3000`; PostgreSQL queda disponible solo para los
+contenedores de la red interna y no publica el puerto `5432` en el host.
+Define `CORS_ORIGINS` como JSON con el dominio publicado, por ejemplo
+`["https://app.cafetrace.co"]`.
 
 ## Documentación complementaria
 

@@ -14,7 +14,7 @@ pip install -r requirements.txt
 test -f .env || cp .env.example .env
 ```
 
-Configura `DATABASE_URL`, `SECRET_KEY`, CORS y, si aplica, las variables blockchain. SQLite sirve para desarrollo; PostgreSQL es el destino de integración/producción.
+Configura `DATABASE_URL`, `SECRET_KEY`, CORS y, si aplica, las variables blockchain. SQLite sirve para desarrollo; PostgreSQL es el destino de integración/producción. Los flujos de login y recuperación se limitan por IP; ajusta `AUTH_RATE_LIMIT_ATTEMPTS` y `AUTH_RATE_LIMIT_WINDOW_SECONDS` según el entorno.
 
 ## Protocolo de arranque
 
@@ -43,6 +43,10 @@ python -m scripts.seed
 - `/api/v1/accounting`: reglas, liquidaciones, margen, salarios y nómina preliminar.
 - `/api/v1/weather`: pronóstico de Icononzo, Tolima.
 - `/api/v1/ai`: baseline explicable de calidad.
+
+Los recursos internos de `/api/v1/batches` requieren sesión: productores solo
+pueden consultar sus lotes; administración y auditoría pueden revisar el
+conjunto. El pasaporte público se expone por `/batches/{id}/timeline`.
 
 ## Migraciones y pruebas
 

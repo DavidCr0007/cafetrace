@@ -14,13 +14,9 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
-    # Desarrollo local: permite localhost, loopback, IPv6 local y la IP LAN
-    # en cualquier puerto de frontend. En producción debe reemplazarse por
-    # una allowlist explícita del dominio publicado.
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|\[::1\])(:\d+)?$",
     allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-IoT-Token"],
 )
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
