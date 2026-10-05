@@ -25,8 +25,10 @@ def upgrade() -> None:
     if inspector.has_table("users"):
         return
 
+    # op.create_table gestiona la creación del tipo nativo en PostgreSQL.
+    # Crearlo manualmente aquí hacía que SQLAlchemy ejecutara CREATE TYPE dos
+    # veces y abortara una instalación limpia con DuplicateObject.
     user_role = sa.Enum("ADMIN", "PRODUCER", "CUSTOMER", name="userrole")
-    user_role.create(bind, checkfirst=True)
     op.create_table(
         "users",
         sa.Column("id", sa.Integer(), primary_key=True),

@@ -46,6 +46,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
+      - name: Validate repository hygiene
+        run: bash ops/check-repo-hygiene.sh
       - name: Reject .git-new in history
         run: test -z "$(git log --all --format=%H -- .git-new)"
       - uses: gitleaks/gitleaks-action@v2

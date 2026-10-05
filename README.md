@@ -135,6 +135,19 @@ limpiar una rama ya publicada, crea un respaldo, reescribe todas sus
 referencias y publica el nuevo hash con `--force-with-lease`; rota cualquier
 credencial que haya existido en el historial antes de publicar.
 
+Antes de confirmar cambios valida qué se enviará al repositorio:
+
+```bash
+bash ops/check-repo-hygiene.sh
+git status --short
+git diff --check
+```
+
+Solo se versionan código fuente, migraciones, pruebas, documentación, archivos
+de bloqueo y configuraciones de ejemplo. Se excluyen `.env`, bases locales,
+entornos virtuales, dependencias instaladas, builds, cobertura, logs, respaldos,
+claves, certificados y repositorios Git anidados.
+
 ## Docker Compose
 
 Copiar `.env.example` a `.env` y reemplazar `POSTGRES_PASSWORD` y `SECRET_KEY`:

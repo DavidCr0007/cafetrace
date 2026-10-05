@@ -1,4 +1,4 @@
-"""complete seller relationship constraint on SQLite deployments
+"""complete seller relationship constraint on every database
 
 Revision ID: af56f178c290
 Revises: ae45f067b189
@@ -16,9 +16,19 @@ def upgrade() -> None:
     if op.get_bind().dialect.name == "sqlite":
         with op.batch_alter_table("orders", recreate="always") as batch_op:
             batch_op.create_foreign_key("fk_orders_seller_id_users", "users", ["seller_id"], ["id"])
+    else:
+        op.create_foreign_key(
+            "fk_orders_seller_id_users",
+            "orders",
+            "users",
+            ["seller_id"],
+            ["id"],
+        )
 
 
 def downgrade() -> None:
     if op.get_bind().dialect.name == "sqlite":
         with op.batch_alter_table("orders", recreate="always") as batch_op:
             batch_op.drop_constraint("fk_orders_seller_id_users", type_="foreignkey")
+    else:
+        op.drop_constraint("fk_orders_seller_id_users", "orders", type_="foreignkey")

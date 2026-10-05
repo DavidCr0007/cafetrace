@@ -1,9 +1,23 @@
-# Entornos y secretos
+# Entornos, repositorios anidados y secretos
 .git-new/
+**/.git-new/
+**/.git/
 .env
 .env.local
+.env.*
 .env.*.local
 *.env
+!.env.example
+!**/.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.log
+*.dump
+*.sql
 *.db
 *.sqlite
 *.sqlite3

@@ -22,7 +22,9 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     full_name = Column(String)
     is_active = Column(Boolean, default=True)
-    role = Column(Enum(UserRole, native_enum=False, length=10), default=UserRole.CUSTOMER)
+    # PostgreSQL usa el tipo nativo `userrole`; SQLite degrada automáticamente
+    # este Enum a VARCHAR y conserva compatibilidad con desarrollo local.
+    role = Column(Enum(UserRole, name="userrole", native_enum=True, length=10), default=UserRole.CUSTOMER)
     access_code_hash = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
