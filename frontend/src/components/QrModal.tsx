@@ -16,15 +16,12 @@ interface QrModalProps {
 export function QrModal({ isOpen, onClose, batchId, productName, category }: QrModalProps) {
   const [qrSvg, setQrSvg] = useState<string>("");
   const [copied, setCopied] = useState(false);
-  const [traceUrl, setTraceUrl] = useState("");
+  const traceUrl = typeof window === "undefined" ? "" : `${window.location.origin}/trace/${batchId}`;
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const url = `${window.location.origin}/trace/${batchId}`;
-      setTraceUrl(url);
-
       QRCode.toString(
-        url,
+        `${window.location.origin}/trace/${batchId}`,
         {
           type: "svg",
           margin: 2,
@@ -72,11 +69,11 @@ export function QrModal({ isOpen, onClose, batchId, productName, category }: QrM
 
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-xs font-semibold mb-2">
             <ShieldCheck className="w-3.5 h-3.5" />
-            Certificado Polygon Blockchain
+            Pasaporte digital del lote
           </div>
           <h3 id="qr-modal-title" className="text-xl font-black tracking-tight">{productName}</h3>
           <p className="text-xs text-amber-200/80 mt-1 font-mono">
-            Trazabilidad Inmutable • Lote #{batchId}
+            Consulta de evidencia • Lote #{batchId}
           </p>
         </div>
 
@@ -96,7 +93,7 @@ export function QrModal({ isOpen, onClose, batchId, productName, category }: QrM
           </div>
 
           <p className="text-xs text-stone-500 mt-4 max-w-xs leading-relaxed">
-            Escanea este código desde la cámara de tu smartphone para acceder al registro público de sensores IoT y firma en Polygon.
+            Escanea este código para consultar la evidencia disponible y el estado real de verificación del lote.
           </p>
 
           <div className="w-full flex items-center gap-2 mt-4 p-2.5 bg-stone-100 rounded-xl text-xs font-mono text-stone-600 border border-stone-200">
@@ -141,9 +138,9 @@ export function QrModal({ isOpen, onClose, batchId, productName, category }: QrM
         {/* Footer info */}
         <div className="bg-stone-50 px-6 py-3 border-t border-stone-100 flex items-center justify-between text-[11px] text-stone-500">
           <span className="flex items-center gap-1">
-            <Cpu className="w-3.5 h-3.5 text-amber-700" /> Nodo ESP32 Huila
+            <Cpu className="w-3.5 h-3.5 text-amber-700" /> Evidencia IoT si está disponible
           </span>
-          <span className="font-mono text-emerald-700 font-semibold">Polygon PoS #80002</span>
+          <span className="font-mono text-emerald-700 font-semibold">Icononzo · Tolima</span>
         </div>
       </div>
     </div>

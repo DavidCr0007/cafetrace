@@ -18,7 +18,7 @@ def test_admin_has_all_permissions_and_read_only_roles_cannot_write():
     admin = user_with_role(UserRole.ADMIN)
     assert ROLE_PERMISSIONS[UserRole.ADMIN] == set(Permission)
 
-    for role in (UserRole.BUYER, UserRole.CUSTOMER, UserRole.AUDITOR):
+    for role in (UserRole.BUYER, UserRole.AUDITOR):
         user = user_with_role(role)
         assert not has_permission(user, Permission.USERS_MANAGE)
         assert not has_permission(user, Permission.ACCOUNTING_WRITE)
@@ -37,7 +37,6 @@ def test_dashboard_access_is_explicit_for_every_profile(role: UserRole):
 
 def test_global_dashboard_summary_is_not_a_buyer_permission():
     assert not has_permission(user_with_role(UserRole.BUYER), Permission.DASHBOARD_SUMMARY_READ)
-    assert not has_permission(user_with_role(UserRole.CUSTOMER), Permission.DASHBOARD_SUMMARY_READ)
     assert has_permission(user_with_role(UserRole.ACCOUNTANT), Permission.DASHBOARD_SUMMARY_READ)
 
 

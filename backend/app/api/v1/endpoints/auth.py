@@ -1,16 +1,24 @@
 from datetime import datetime, timedelta, timezone
 import secrets
 from typing import Any
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.security import create_access_token, verify_password, get_password_hash, hash_access_code
+from app.core.security import (
+    create_access_token,
+    create_refresh_family_id,
+    create_refresh_token,
+    get_password_hash,
+    hash_access_code,
+    hash_refresh_token,
+    verify_password,
+)
 from app.core.rate_limit import clear_auth_rate_limit, enforce_auth_rate_limit
-from app.models.user import User as UserModel, UserRole
+from app.models.user import RefreshSession, User as UserModel, UserRole
 from app.schemas.token import Token
 from app.schemas.user import User, UserCreate, PasswordResetRequestCreate
 from app.models.user import PasswordResetRequest
@@ -22,9 +30,41 @@ class LoginJSON(BaseModel):
     email: EmailStr
     password: str
 
+
+def _set_refresh_cookie(response: Response, token: str) -> None:
+    response.set_cookie(
+        key=settings.REFRESH_COOKIE_NAME,
+        value=token,
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+        httponly=True,
+        secure=settings.REFRESH_COOKIE_SECURE,
+        samesite=settings.REFRESH_COOKIE_SAMESITE,
+        path=f"{settings.API_V1_STR}/auth",
+    )
+
+
+def _issue_refresh_session(db: Session, user: UserModel, family_id: str | None = None) -> str:
+    raw_token = create_refresh_token()
+    db.add(RefreshSession(
+        user_id=user.id,
+        token_hash=hash_refresh_token(raw_token),
+        family_id=family_id or create_refresh_family_id(),
+        expires_at=datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+    ))
+    return raw_token
+
+
+def _complete_login(db: Session, response: Response, user: UserModel, method: str) -> dict[str, str]:
+    raw_refresh = _issue_refresh_session(db, user)
+    write_audit(db, "auth.login", "user", str(user.id), user, {"method": method})
+    db.commit()
+    _set_refresh_cookie(response, raw_refresh)
+    return {"access_token": create_access_token(user.id), "token_type": "bearer"}
+
 @router.post("/login/access-token", response_model=Token)
 def login_access_token(
     request: Request,
+    response: Response,
     db: Session = Depends(get_db),
     form_data: OAuth2PasswordRequestForm = Depends()
 ) -> Any:
@@ -45,20 +85,13 @@ def login_access_token(
             detail="Inactive user"
         )
     clear_auth_rate_limit(request, "oauth_login")
-    write_audit(db, "auth.login", "user", str(user.id), user, {"method": "oauth2"})
-    db.commit()
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    return {
-        "access_token": create_access_token(
-            user.id, expires_delta=access_token_expires
-        ),
-        "token_type": "bearer",
-    }
+    return _complete_login(db, response, user, "oauth2")
 
 @router.post("/login", response_model=Token)
 def login_json(
     login_data: LoginJSON,
     request: Request,
+    response: Response,
     db: Session = Depends(get_db)
 ) -> Any:
     """
@@ -77,15 +110,59 @@ def login_json(
             detail="Inactive user"
         )
     clear_auth_rate_limit(request, "json_login")
-    write_audit(db, "auth.login", "user", str(user.id), user, {"method": "json"})
+    return _complete_login(db, response, user, "json")
+
+
+@router.post("/refresh", response_model=Token)
+def refresh_access_token(request: Request, response: Response, db: Session = Depends(get_db)) -> Any:
+    raw_token = request.cookies.get(settings.REFRESH_COOKIE_NAME)
+    if not raw_token:
+        raise HTTPException(status_code=401, detail="Refresh token requerido")
+    token_hash = hash_refresh_token(raw_token)
+    session = db.query(RefreshSession).filter(RefreshSession.token_hash == token_hash).first()
+    now = datetime.now(timezone.utc)
+    if not session:
+        raise HTTPException(status_code=401, detail="Refresh token inválido")
+    if session.revoked_at is not None:
+        db.query(RefreshSession).filter(
+            RefreshSession.family_id == session.family_id,
+            RefreshSession.revoked_at.is_(None),
+        ).update({"revoked_at": now})
+        write_audit(db, "auth.refresh_reuse_detected", "user", str(session.user_id), metadata={"family_id": session.family_id})
+        db.commit()
+        response.delete_cookie(settings.REFRESH_COOKIE_NAME, path=f"{settings.API_V1_STR}/auth")
+        raise HTTPException(status_code=401, detail="Reutilización de refresh token detectada")
+    if session.expires_at <= now:
+        session.revoked_at = now
+        db.commit()
+        raise HTTPException(status_code=401, detail="Refresh token expirado")
+    user = db.query(UserModel).filter(UserModel.id == session.user_id, UserModel.is_active.is_(True)).first()
+    if not user:
+        session.revoked_at = now
+        db.commit()
+        raise HTTPException(status_code=401, detail="Cuenta no disponible")
+    replacement = _issue_refresh_session(db, user, session.family_id)
+    session.revoked_at = now
+    session.last_used_at = now
+    session.replaced_by_hash = hash_refresh_token(replacement)
+    write_audit(db, "auth.refresh_rotated", "user", str(user.id), user)
     db.commit()
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    return {
-        "access_token": create_access_token(
-            user.id, expires_delta=access_token_expires
-        ),
-        "token_type": "bearer",
-    }
+    _set_refresh_cookie(response, replacement)
+    return {"access_token": create_access_token(user.id), "token_type": "bearer"}
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(request: Request, response: Response, db: Session = Depends(get_db)) -> Response:
+    raw_token = request.cookies.get(settings.REFRESH_COOKIE_NAME)
+    if raw_token:
+        session = db.query(RefreshSession).filter(RefreshSession.token_hash == hash_refresh_token(raw_token)).first()
+        if session and session.revoked_at is None:
+            session.revoked_at = datetime.now(timezone.utc)
+            write_audit(db, "auth.logout", "user", str(session.user_id), metadata={"family_id": session.family_id})
+            db.commit()
+    response.delete_cookie(settings.REFRESH_COOKIE_NAME, path=f"{settings.API_V1_STR}/auth")
+    response.status_code = status.HTTP_204_NO_CONTENT
+    return response
 
 @router.post("/register", response_model=User, status_code=status.HTTP_201_CREATED)
 def register_user(
@@ -106,7 +183,7 @@ def register_user(
         hashed_password=get_password_hash(user_in.password),
         full_name=user_in.full_name,
         # El registro público nunca puede crear administradores o productores.
-        role=UserRole.CUSTOMER,
+        role=UserRole.BUYER,
         is_active=True
     )
     db.add(db_user)

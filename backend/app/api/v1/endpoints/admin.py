@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
 import secrets
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, status
+from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from app.api.deps import get_current_active_admin
 from app.core.database import get_db
@@ -8,8 +10,8 @@ from app.models.batch import Batch
 from app.models.order import Order
 from app.models.product import Product
 from app.models.traceability import AuditEvent, IoTDevice, BlockchainNotarization
-from app.models.user import User, UserRole, PasswordResetRequest
-from app.schemas.user import AdminUserUpdate, PasswordResetApproval, AccessCodeRotateResponse
+from app.models.user import RefreshSession, User, UserRole, PasswordResetRequest
+from app.schemas.user import AdminUserCreate, AdminUserUpdate, PasswordResetApproval, AccessCodeRotateResponse, User as UserSchema
 from app.core.security import get_password_hash, hash_access_code
 from app.services.audit import write_audit
 from app.core.permissions import Permission, require_permission
@@ -46,12 +48,48 @@ def access_matrix(_: User = Depends(get_current_active_admin)):
     return {role.value: sorted(permission.value for permission in permissions) for role, permissions in ROLE_PERMISSIONS.items()}
 
 
-@router.patch("/users/{user_id}")
+@router.post("/users", response_model=UserSchema, status_code=status.HTTP_201_CREATED)
+def create_managed_user(
+    payload: AdminUserCreate,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_active_admin),
+):
+    email = str(payload.email).strip().lower()
+    if db.query(User).filter(func.lower(User.email) == email).first():
+        raise HTTPException(status_code=409, detail="El correo ya está registrado")
+    user = User(
+        email=email,
+        full_name=payload.full_name.strip() if payload.full_name else None,
+        role=payload.role,
+        is_active=payload.is_active,
+        hashed_password=get_password_hash(payload.password),
+    )
+    db.add(user)
+    try:
+        db.flush()
+        write_audit(
+            db,
+            "user.created",
+            "user",
+            str(user.id),
+            admin,
+            {"email": user.email, "role": user.role.value, "is_active": user.is_active},
+        )
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="El correo ya está registrado")
+    db.refresh(user)
+    return user
+
+
+@router.patch("/users/{user_id}", response_model=UserSchema)
 def update_user_access(user_id: int, payload: AdminUserUpdate, db: Session = Depends(get_db), admin: User = Depends(get_current_active_admin)):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
-    if payload.email and payload.email != user.email and db.query(User).filter(User.email == payload.email).first():
+    email = str(payload.email).strip().lower() if payload.email else None
+    if email and email != user.email.lower() and db.query(User).filter(func.lower(User.email) == email).first():
         raise HTTPException(status_code=409, detail="El correo ya está registrado")
     if user.id == admin.id and payload.is_active is False:
         raise HTTPException(status_code=422, detail="El administrador actual no puede desactivarse a sí mismo")
@@ -59,12 +97,27 @@ def update_user_access(user_id: int, payload: AdminUserUpdate, db: Session = Dep
         active_admins = db.query(User).filter(User.role == UserRole.ADMIN, User.is_active.is_(True), User.id != user.id).count()
         if active_admins == 0:
             raise HTTPException(status_code=422, detail="Debe existir al menos un administrador activo")
-    for field in ("email", "full_name", "role", "is_active"):
-        value = getattr(payload, field)
-        if value is not None:
-            setattr(user, field, value)
-    write_audit(db, "user.access_updated", "user", str(user.id), admin, {"role": user.role.value, "is_active": user.is_active})
-    db.commit()
+    before = {"email": user.email, "full_name": user.full_name, "role": user.role.value, "is_active": user.is_active}
+    if email is not None:
+        user.email = email
+    if payload.full_name is not None:
+        user.full_name = payload.full_name.strip() or None
+    if payload.role is not None:
+        user.role = payload.role
+    if payload.is_active is not None:
+        user.is_active = payload.is_active
+        if payload.is_active is False:
+            db.query(RefreshSession).filter(
+                RefreshSession.user_id == user.id,
+                RefreshSession.revoked_at.is_(None),
+            ).update({"revoked_at": datetime.now(timezone.utc)})
+    after = {"email": user.email, "full_name": user.full_name, "role": user.role.value, "is_active": user.is_active}
+    write_audit(db, "user.access_updated", "user", str(user.id), admin, {"before": before, "after": after})
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="El correo ya está registrado")
     db.refresh(user)
     return user
 
@@ -98,6 +151,10 @@ def approve_password_reset(request_id: int, payload: PasswordResetApproval, db: 
         raise HTTPException(status_code=410, detail="La solicitud expiró")
     user = db.query(User).filter(User.id == request.user_id).first()
     user.hashed_password = get_password_hash(payload.new_password)
+    db.query(RefreshSession).filter(
+        RefreshSession.user_id == user.id,
+        RefreshSession.revoked_at.is_(None),
+    ).update({"revoked_at": datetime.now(timezone.utc)})
     request.status = "approved"
     request.reviewed_by = admin.id
     request.reviewed_at = datetime.now(timezone.utc)

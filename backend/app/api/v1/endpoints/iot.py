@@ -1,7 +1,8 @@
 import hashlib
 import hmac
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Response
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from app.api.deps import get_current_producer
 from app.core.database import get_db
@@ -13,6 +14,20 @@ from app.schemas.traceability import IoTDeviceCreate, IoTIngest
 from app.services.audit import write_audit
 
 router = APIRouter()
+
+
+@router.get("/devices")
+def list_devices(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_producer),
+):
+    query = db.query(IoTDevice)
+    if current_user.role.value != "admin":
+        query = query.join(Batch).filter(Batch.producer_id == current_user.id)
+    return [
+        {"device_id": item.device_id, "batch_id": item.batch_id, "is_active": item.is_active, "last_seen_at": item.last_seen_at}
+        for item in query.order_by(IoTDevice.created_at.desc()).all()
+    ]
 
 
 @router.post("/devices")
@@ -43,6 +58,7 @@ def register_device(
 @router.post("/ingest", status_code=201)
 def ingest(
     payload: IoTIngest,
+    response: Response,
     x_iot_device: str = Header(...),
     x_iot_token: str = Header(...),
     db: Session = Depends(get_db),
@@ -60,10 +76,21 @@ def ingest(
     if abs((now - measured).total_seconds()) > settings.IOT_MAX_CLOCK_SKEW_SECONDS:
         raise HTTPException(status_code=422, detail="La medición está fuera de la ventana temporal permitida")
     data = {"sensor_id": payload.sensor_id, "temperature": payload.temperature, "humidity": payload.humidity, "location": payload.location, **payload.payload}
-    record = TraceabilityRecord(batch_id=payload.batch_id, record_type="iot", data=data, external_id=f"{x_iot_device}:{payload.measured_at.isoformat()}")
+    external_id = f"{x_iot_device}:{payload.measured_at.isoformat()}"
+    existing = db.query(TraceabilityRecord).filter(TraceabilityRecord.external_id == external_id).first()
+    if existing:
+        response.status_code = 200
+        return {"id": existing.id, "batch_id": existing.batch_id, "record_type": existing.record_type, "timestamp": existing.timestamp}
+    record = TraceabilityRecord(batch_id=payload.batch_id, record_type="iot", data=data, external_id=external_id)
     db.add(record)
     device.last_seen_at = now
     write_audit(db, "iot.measurement_ingested", "batch", str(payload.batch_id), metadata={"device_id": x_iot_device, "sensor_id": payload.sensor_id})
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        existing = db.query(TraceabilityRecord).filter(TraceabilityRecord.external_id == external_id).one()
+        response.status_code = 200
+        return {"id": existing.id, "batch_id": existing.batch_id, "record_type": existing.record_type, "timestamp": existing.timestamp}
     db.refresh(record)
     return {"id": record.id, "batch_id": record.batch_id, "record_type": record.record_type, "timestamp": record.timestamp}

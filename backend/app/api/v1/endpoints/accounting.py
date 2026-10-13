@@ -1,7 +1,6 @@
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.permissions import Permission, require_permission
@@ -50,12 +49,8 @@ def create_rule(payload: CompensationRuleCreate, db: Session = Depends(get_db), 
 
 @router.post("/orders/{order_id}/settlement")
 def calculate_order_settlement(order_id: int, payload: SettlementCostInput, db: Session = Depends(get_db), accountant: User = Depends(require_permission(Permission.ACCOUNTING_WRITE))):
-    # El bloqueo protege PostgreSQL; la restricción UNIQUE y el manejo de
-    # IntegrityError cubren la carrera equivalente en SQLite y entre réplicas.
-    if db.bind and db.bind.dialect.name == "sqlite":
-        # SQLite no implementa SELECT ... FOR UPDATE. Esta transacción adquiere
-        # el bloqueo de escritura antes de consultar la liquidación existente.
-        db.execute(text("BEGIN IMMEDIATE"))
+    # PostgreSQL serializa el cálculo por pedido. La restricción UNIQUE y el
+    # manejo de IntegrityError cubren además carreras entre réplicas.
     order = db.query(Order).filter(Order.id == order_id).with_for_update().first()
     if not order:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")

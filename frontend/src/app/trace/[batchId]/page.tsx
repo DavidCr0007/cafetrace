@@ -19,15 +19,16 @@ import {
 import { getBatchTimeline, getWeatherForecast, BatchTimelineResponse, WeatherForecast } from "@/lib/api";
 
 interface TracePageProps {
-  params: {
+  params: Promise<{
     batchId: string;
-  };
+  }>;
 }
 
 export const dynamic = "force-dynamic";
 
 export default async function TracePage({ params }: TracePageProps) {
-  const batchId = parseInt(params.batchId, 10) || 1;
+  const { batchId: rawBatchId } = await params;
+  const batchId = parseInt(rawBatchId, 10) || 1;
   const [timelineData, weatherForecast]: [BatchTimelineResponse | null, WeatherForecast | null] = await Promise.all([
     getBatchTimeline(batchId),
     getWeatherForecast(3),

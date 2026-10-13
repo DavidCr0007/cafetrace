@@ -17,7 +17,7 @@ class TraceabilityRecord(Base):
     
     # Hash de la transacción en Polygon (si aplica)
     blockchain_hash = Column(String, nullable=True)
-    external_id = Column(String, nullable=True, index=True)
+    external_id = Column(String, nullable=True, unique=True, index=True)
     
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
 

@@ -14,8 +14,8 @@ Plataforma de trazabilidad agrícola, comercio electrónico, IoT, blockchain y l
 ## Requisitos
 
 - Python 3.10+; recomendado Python 3.12.
-- Node.js 18+; recomendado Node.js 20.
-- PostgreSQL 16 para integración; SQLite soportado para desarrollo local.
+- Node.js 20.9+; recomendado Node.js 20 LTS.
+- PostgreSQL 16 para desarrollo, pruebas, integración y producción.
 - Docker y Docker Compose solo para el entorno contenedorizado.
 
 ## Desarrollo local
@@ -25,6 +25,7 @@ Plataforma de trazabilidad agrícola, comercio electrónico, IoT, blockchain y l
 Desde la raíz:
 
 ```bash
+./ops/dev-db.sh start
 python -m venv .venv  # primera instalación solamente
 cd backend
 source ../.venv/bin/activate
@@ -32,26 +33,28 @@ pip install -r requirements.txt
 test -f .env || cp .env.example .env
 alembic upgrade head
 uvicorn app.main:app --reload
-
-# Para reiniciar el backend
-pkill -f "uvicorn app.main:app"
-# Iniciar backend
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
-
 
 API: `http://localhost:8000`.
 
-El archivo de ejemplo usa PostgreSQL. Para desarrollo local sin PostgreSQL,
-conserva `backend/.env` y verifica que contenga
-`DATABASE_URL=sqlite:///./cafetrace.db` antes de ejecutar las migraciones.
-No ejecutes `cp .env.example .env` si el archivo ya existe: sobrescribiría la
-configuración local y volvería a apuntar la aplicación a PostgreSQL.
+La aplicación exige PostgreSQL. `DATABASE_URL` debe comenzar por
+`postgresql://` o `postgresql+psycopg://`; SQLite ya no es una ruta operativa.
+No ejecutes `cp .env.example .env` si el archivo ya existe porque sobrescribiría
+la configuración local. El script `ops/dev-db.sh` crea un clúster aislado en
+`.runtime/postgres` y usa `127.0.0.1:55432`, evitando colisionar con PostgreSQL
+del sistema en `5432`. No elimina ni modifica otras instancias.
 
 ```bash
+./ops/dev-db.sh status
 curl http://localhost:8000/health
 curl http://localhost:8000/health/ready
+./ops/dev-db.sh stop  # cuando termines la sesión local
 ```
+
+`/health` confirma que el proceso responde; `/health/ready` solo devuelve 200
+cuando la conexión con PostgreSQL también funciona. Si el puerto `8000` ya está
+ocupado, detén el proceso anterior desde su terminal con `Ctrl+C` y verifica el
+propietario con `ss -ltnp 'sport = :8000'`.
 
 ### Datos demo
 
@@ -85,7 +88,7 @@ Frontend: `http://localhost:3000`.
 - `/admin`: panel administrativo y auditoría.
 - `/docs`: Swagger de la API.
 
-Roles: `admin`, `accountant`, `seller`, `producer`, `marketing`, `buyer`, `customer` legado y `auditor`.
+Roles: `admin`, `accountant`, `seller`, `producer`, `marketing`, `buyer` y `auditor`.
 
 Todos los perfiles tienen acceso a su dashboard funcional. La autorización real se aplica en el backend; el frontend solo presenta los módulos permitidos. Las métricas globales operativas requieren además `dashboard.summary.read`.
 
@@ -125,6 +128,8 @@ npm run build
 - `SECRET_KEY` debe ser aleatoria y exclusiva del entorno.
 - `BLOCKCHAIN_PRIVATE_KEY` nunca debe llegar al frontend ni versionarse.
 - `DATABASE_URL` define la base usada por Alembic y FastAPI.
+- El access token dura como máximo 60 minutos. El refresh token se rota, puede
+  revocarse y se transporta únicamente en una cookie `HttpOnly`.
 - `NEXT_PUBLIC_API_URL` debe apuntar al backend accesible desde el navegador.
 - `ENVIRONMENT=production` exige una `SECRET_KEY` de al menos 32 caracteres y una allowlist `CORS_ORIGINS` sin comodines ni orígenes locales.
 - La notarización permanece desactivada hasta configurar RPC, contrato y clave.

@@ -12,6 +12,10 @@ from app.schemas.token import TokenPayload
 oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl=f"{settings.API_V1_STR}/auth/login/access-token"
 )
+optional_oauth2_scheme = OAuth2PasswordBearer(
+    tokenUrl=f"{settings.API_V1_STR}/auth/login/access-token",
+    auto_error=False,
+)
 
 def get_current_user(
     db: Session = Depends(get_db),
@@ -27,7 +31,7 @@ def get_current_user(
             token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
         )
         user_id: str = payload.get("sub")
-        if user_id is None:
+        if user_id is None or payload.get("type") != "access":
             raise credentials_exception
         token_data = TokenPayload(sub=user_id)
     except InvalidTokenError:
@@ -46,6 +50,15 @@ def get_current_user(
             detail="Inactive user"
         )
     return user
+
+
+def get_optional_current_user(
+    db: Session = Depends(get_db),
+    token: str | None = Depends(optional_oauth2_scheme),
+) -> UserModel | None:
+    if not token:
+        return None
+    return get_current_user(db=db, token=token)
 
 def get_current_active_admin(
     current_user: UserModel = Depends(get_current_user),

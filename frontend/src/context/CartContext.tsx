@@ -33,6 +33,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     try {
       const saved = localStorage.getItem("cafetrace_cart");
       if (saved) {
+        // El carrito persistido solo está disponible después de hidratar el cliente.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setItems(JSON.parse(saved));
       }
     } catch {

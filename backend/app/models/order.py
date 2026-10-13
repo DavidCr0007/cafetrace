@@ -17,6 +17,7 @@ class Order(Base):
     status = Column(String, default="pending")  # pending, confirmed, processing, shipped, delivered, cancelled
     payment_method = Column(String, default="contra_entrega")  # contra_entrega, pse, transferencia
     payment_reference = Column(String, nullable=True)
+    customer_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     seller_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     notes = Column(String, nullable=True)
     
@@ -25,6 +26,7 @@ class Order(Base):
 
     items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
     seller = relationship("User", foreign_keys=[seller_id])
+    customer_user = relationship("User", foreign_keys=[customer_user_id])
 
 
 class OrderItem(Base):

@@ -50,6 +50,8 @@ class OrderRead(BaseModel):
     payment_method: str
     payment_reference: Optional[str] = None
     notes: Optional[str] = None
+    customer_user_id: Optional[int] = None
+    seller_id: Optional[int] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
     items: List[OrderItemRead] = []

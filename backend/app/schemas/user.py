@@ -6,7 +6,7 @@ from app.models.user import UserRole
 class UserBase(BaseModel):
     email: EmailStr
     full_name: Optional[str] = None
-    role: UserRole = UserRole.CUSTOMER
+    role: UserRole = UserRole.BUYER
 
 class UserCreate(UserBase):
     password: str = Field(min_length=12)
@@ -24,6 +24,13 @@ class AdminUserUpdate(BaseModel):
     role: Optional[UserRole] = None
     is_active: Optional[bool] = None
 
+
+class AdminUserCreate(BaseModel):
+    email: EmailStr
+    full_name: Optional[str] = None
+    role: UserRole = UserRole.BUYER
+    password: str = Field(min_length=12)
+    is_active: bool = True
 
 class PasswordResetRequestCreate(BaseModel):
     email: Optional[EmailStr] = None

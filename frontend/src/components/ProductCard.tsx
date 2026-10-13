@@ -11,7 +11,6 @@ import {
   Snowflake,
   MapPin,
   Tag,
-  ShoppingBag,
   QrCode,
   ExternalLink,
   Plus,
@@ -75,7 +74,7 @@ export function ProductCard({ product }: ProductCardProps) {
                 )}
               </div>
               <span className="text-[11px] uppercase tracking-widest font-black text-stone-500">
-                {isCoffee ? "Café de Especialidad Huila" : "Derivado Cárnico Certificado"}
+                {isCoffee ? "Café de especialidad" : isMeat ? "Derivado cárnico" : "Producto trazable"}
               </span>
             </div>
           )}
@@ -116,9 +115,9 @@ export function ProductCard({ product }: ProductCardProps) {
         {/* Cuerpo de la tarjeta */}
         <div className="p-6 flex-1 flex flex-col justify-between">
           <div>
-            <div className="flex items-center gap-1 text-[11px] font-semibold text-emerald-700 mb-1.5">
+            <div className="mb-1.5 flex items-center gap-1 text-[11px] font-semibold text-emerald-700">
               <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Verificación Polygon Inmutable</span>
+              <span>{product.attributes?.blockchain_verified ? "Verificación blockchain confirmada" : "Pasaporte del lote disponible"}</span>
             </div>
 
             <h3 className="text-xl font-black text-stone-900 tracking-tight line-clamp-1 group-hover:text-amber-950 transition-colors">
@@ -127,7 +126,7 @@ export function ProductCard({ product }: ProductCardProps) {
 
             <p className="text-xs text-stone-500 mt-2 leading-relaxed line-clamp-2">
               {product.description ||
-                "Producto con trazabilidad verificable en blockchain y telemetría de sensores en origen."}
+                "Consulta en el pasaporte la evidencia disponible para este lote."}
             </p>
 
             {/* Atributos dinámicos */}
@@ -174,9 +173,7 @@ export function ProductCard({ product }: ProductCardProps) {
           {/* Precio y Acciones */}
           <div className="mt-6 pt-4 border-t border-stone-100 flex flex-col gap-3">
             <div className="flex items-baseline justify-between">
-              <span className="text-[11px] uppercase font-bold tracking-wider text-stone-400">
-                Precio Productor
-              </span>
+              <span className="text-[11px] uppercase font-bold tracking-wider text-stone-400">Precio publicado</span>
               <span className="text-2xl font-black text-stone-900 tracking-tight">
                 {formattedPrice}
               </span>
@@ -194,13 +191,16 @@ export function ProductCard({ product }: ProductCardProps) {
               <button
                 type="button"
                 onClick={handleAddToCart}
+                disabled={product.stock <= 0}
                 className={`py-2.5 px-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer ${
-                  justAdded
+                  product.stock <= 0
+                    ? "cursor-not-allowed bg-stone-300 text-stone-600"
+                    : justAdded
                     ? "bg-emerald-700 text-white"
                     : "bg-amber-900 hover:bg-amber-800 text-white"
                 }`}
               >
-                {justAdded ? (
+                {product.stock <= 0 ? <span>Agotado</span> : justAdded ? (
                   <>
                     <Check className="w-4 h-4 text-white" />
                     <span>¡Agregado!</span>

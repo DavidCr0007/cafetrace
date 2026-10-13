@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models.order import Order
 from app.models.operations import Payment, Shipment
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.schemas.operations import PaymentIntent, ShipmentUpdate
 from app.services.audit import write_audit
 from app.core.permissions import Permission, require_permission
@@ -12,9 +12,13 @@ router = APIRouter()
 
 
 @router.post("/orders/{order_id}/payment-intents")
-def create_payment_intent(order_id: int, payload: PaymentIntent, db: Session = Depends(get_db)):
+def create_payment_intent(order_id: int, payload: PaymentIntent, db: Session = Depends(get_db), current_user: User = Depends(require_permission(Permission.ORDERS_WRITE))):
     order = db.query(Order).filter(Order.id == order_id).first()
     if not order:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado")
+    if current_user.role == UserRole.BUYER and order.customer_user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado")
+    if current_user.role == UserRole.SELLER and order.seller_id != current_user.id:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
     if payload.provider != "manual":
         raise HTTPException(status_code=501, detail="Proveedor de pago pendiente de credenciales y contrato comercial")
@@ -22,7 +26,7 @@ def create_payment_intent(order_id: int, payload: PaymentIntent, db: Session = D
     if not payment:
         payment = Payment(order_id=order_id, amount=order.total_amount, provider="manual", status="pending", metadata_json={"mode": "contra_entrega"})
         db.add(payment)
-        write_audit(db, "payment.intent_created", "order", str(order_id), metadata={"provider": "manual"})
+        write_audit(db, "payment.intent_created", "order", str(order_id), current_user, {"provider": "manual"})
         db.commit()
         db.refresh(payment)
     return {"id": payment.id, "order_id": order_id, "provider": payment.provider, "amount": payment.amount, "status": payment.status}
@@ -30,7 +34,10 @@ def create_payment_intent(order_id: int, payload: PaymentIntent, db: Session = D
 
 @router.put("/orders/{order_id}/shipment")
 def update_shipment(order_id: int, payload: ShipmentUpdate, db: Session = Depends(get_db), admin: User = Depends(require_permission(Permission.LOGISTICS_WRITE))):
-    if not db.query(Order).filter(Order.id == order_id).first():
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado")
+    if admin.role == UserRole.SELLER and order.seller_id != admin.id:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
     shipment = db.query(Shipment).filter(Shipment.order_id == order_id).first()
     if not shipment:

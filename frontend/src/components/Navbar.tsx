@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { Activity, ShoppingBag, ShieldCheck } from "lucide-react";
+import { Activity, LayoutDashboard, ShoppingBag } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 
 interface NavbarProps {
@@ -17,74 +17,62 @@ export function Navbar({ backendStatus }: NavbarProps) {
   const { openCart, totalItems } = useCart();
 
   return (
-    <header className="border-b border-stone-200/80 bg-white/80 backdrop-blur-md sticky top-0 z-40 transition-all">
-      <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-        {/* Logo */}
-        <Link href="/" className="flex items-center gap-3 group">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-950 to-stone-900 flex items-center justify-center text-amber-400 font-serif text-xl font-bold shadow-md shadow-amber-950/10 group-hover:scale-105 transition-transform">
-            ☕
+    <header className="sticky top-0 z-40 border-b border-stone-200/80 bg-[#f7f5ef]/90 backdrop-blur-xl">
+      <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-3.5 sm:px-8">
+        <Link href="/" className="group flex items-center gap-3" aria-label="CaféTrace, página principal">
+          <div className="grid h-10 w-10 place-items-center rounded-2xl bg-stone-950 text-xs font-black tracking-tight text-emerald-300 shadow-md shadow-stone-950/10 transition-transform group-hover:-rotate-3">
+            CT
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xl font-black tracking-tight text-stone-950">
-                CaféTrace <span className="text-emerald-700">IA</span>
+              <span className="text-lg font-black tracking-tight text-stone-950 sm:text-xl">
+                CaféTrace
               </span>
-              <span className="hidden sm:inline-block text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-100/80 text-emerald-800 font-bold border border-emerald-200/70">
-                Huila B2B & B2C
+              <span className="hidden rounded-full border border-emerald-200 bg-emerald-100/80 px-2.5 py-0.5 text-[10px] font-bold text-emerald-800 sm:inline-block">
+                Piloto controlado
               </span>
             </div>
-            <span className="text-[10px] text-stone-400 font-medium block">
-              Trazabilidad Inmutable & E-commerce Directo
+            <span className="block text-[10px] font-medium text-stone-500">
+              Evidencia de origen y operación
             </span>
           </div>
         </Link>
 
-        {/* Acciones derecha */}
-        <div className="flex items-center gap-4">
-          {/* Estado Backend */}
-          <div className="hidden md:flex items-center gap-2 text-xs font-mono">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="hidden items-center gap-2 text-xs md:flex" title={backendStatus.message}>
             <Activity
               className={`w-3.5 h-3.5 ${
-                backendStatus.online ? "text-emerald-600 animate-pulse" : "text-amber-500"
+                backendStatus.online ? "text-emerald-600" : "text-amber-600"
               }`}
             />
-            <span className="text-stone-400">FastAPI:</span>
+            <span className="text-stone-500">API</span>
             {backendStatus.online ? (
-              <span className="font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/60 text-[11px]">
-                Online (v{backendStatus.version})
+              <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-800">
+                Operativa{backendStatus.version ? ` · v${backendStatus.version}` : ""}
               </span>
             ) : (
               <span
-                className="font-medium text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200/60 text-[11px]"
-                title={backendStatus.message}
+                className="rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800"
               >
-                Local Mock
+                Sin conexión
               </span>
             )}
           </div>
 
-          {/* Botón de Trazabilidad Rápida */}
-          <Link
-            href="/trace/1"
-            className="hidden lg:flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-stone-700 hover:text-emerald-800 bg-stone-100 hover:bg-emerald-50/60 border border-stone-200 transition-colors"
-          >
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Ver Demo Lote #1</span>
+          <Link href="/dashboard" className="inline-flex items-center gap-2 rounded-xl border border-stone-300 bg-white/70 px-3 py-2.5 text-xs font-bold text-stone-700 transition hover:border-emerald-700 hover:text-emerald-800" aria-label="Abrir dashboard">
+            <LayoutDashboard className="h-4 w-4" /><span className="hidden lg:inline">Dashboard</span>
           </Link>
-          <Link href="/admin" className="hidden lg:inline text-xs font-bold text-stone-600 hover:text-emerald-800">Admin</Link>
-          <Link href="/dashboard" className="hidden lg:inline text-xs font-bold text-stone-600 hover:text-emerald-800">Dashboard</Link>
 
-          {/* Botón Carrito */}
           <button
             type="button"
             onClick={openCart}
-            className="relative flex items-center gap-2 px-4 py-2 bg-amber-950 hover:bg-amber-900 text-white rounded-xl font-bold text-xs shadow-md transition-all cursor-pointer hover:shadow-lg active:scale-95"
+            className="relative flex items-center gap-2 rounded-xl bg-stone-950 px-3 py-2.5 text-xs font-bold text-white shadow-md transition hover:bg-stone-800 sm:px-4"
             aria-label="Abrir carrito"
           >
-            <ShoppingBag className="w-4 h-4 text-amber-300" />
+            <ShoppingBag className="h-4 w-4 text-emerald-300" />
             <span className="hidden sm:inline">Carrito</span>
             {totalItems > 0 && (
-              <span className="w-5 h-5 rounded-full bg-emerald-500 text-stone-950 font-black text-[11px] flex items-center justify-center animate-in zoom-in-50">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-300 text-[11px] font-black text-stone-950">
                 {totalItems}
               </span>
             )}

@@ -1,11 +1,12 @@
 from typing import Any, List
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.core.security import get_password_hash
-from app.models.user import User as UserModel
+from app.models.user import RefreshSession, User as UserModel
 from app.schemas.user import User, UserUpdate
 from app.core.permissions import Permission, require_permission, ROLE_PERMISSIONS
 from app.services.audit import write_audit
@@ -44,6 +45,10 @@ def update_user_me(
 
     if user_in.password is not None and user_in.password.strip():
         current_user.hashed_password = get_password_hash(user_in.password)
+        db.query(RefreshSession).filter(
+            RefreshSession.user_id == current_user.id,
+            RefreshSession.revoked_at.is_(None),
+        ).update({"revoked_at": datetime.now(timezone.utc)})
 
     db.add(current_user)
     write_audit(db, "user.profile_updated", "user", str(current_user.id), current_user)

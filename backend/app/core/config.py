@@ -8,13 +8,17 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     
     # Database
-    DATABASE_URL: str = "postgresql://user:pass@localhost:5432/cafetrace"
+    DATABASE_URL: str = "postgresql://cafetrace:cafetrace@localhost:5432/cafetrace"
     
     # Security & JWT
     # Nunca se entrega una clave utilizable desde el código fuente.
     SECRET_KEY: str = ""
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 14
+    REFRESH_COOKIE_NAME: str = "cafetrace_refresh"
+    REFRESH_COOKIE_SECURE: bool = False
+    REFRESH_COOKIE_SAMESITE: Literal["lax", "strict", "none"] = "lax"
     AUTH_RATE_LIMIT_ATTEMPTS: int = 5
     AUTH_RATE_LIMIT_WINDOW_SECONDS: int = 60
 
@@ -35,6 +39,13 @@ class Settings(BaseSettings):
             raise ValueError("CORS_ORIGINS no admite comodines")
         return [origin.rstrip("/") for origin in origins]
 
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def validate_database_url(cls, value: str) -> str:
+        if not value.startswith(("postgresql://", "postgresql+psycopg2://")):
+            raise ValueError("DATABASE_URL debe usar PostgreSQL")
+        return value
+
     @model_validator(mode="after")
     def validate_production_settings(self):
         if self.ENVIRONMENT == "production":
@@ -43,6 +54,10 @@ class Settings(BaseSettings):
             forbidden_development_origins = ("localhost", "127.0.0.1", "[::1]")
             if any(any(value in origin for value in forbidden_development_origins) for origin in self.CORS_ORIGINS):
                 raise ValueError("CORS_ORIGINS de producción no puede incluir orígenes locales")
+            if not self.REFRESH_COOKIE_SECURE:
+                raise ValueError("REFRESH_COOKIE_SECURE debe estar activo en producción")
+        if self.REFRESH_COOKIE_SAMESITE == "none" and not self.REFRESH_COOKIE_SECURE:
+            raise ValueError("SameSite=None requiere una cookie Secure")
         return self
 
     # Pronóstico meteorológico usado como contexto para el módulo IoT.

@@ -1,8 +1,12 @@
-from fastapi import FastAPI
+import logging
+
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api.v1.api import api_router
 import app.models  # Asegura que los modelos se carguen para Base.metadata
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="CaféTrace IA API",
@@ -14,9 +18,9 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
-    allow_credentials=False,
+    allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-IoT-Token"],
+    allow_headers=["Authorization", "Content-Type", "X-IoT-Device", "X-IoT-Token"],
 )
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
@@ -39,8 +43,13 @@ async def readiness_check():
             connection.execute(text("SELECT 1"))
         return {"status": "ready", "database": "ok"}
     except Exception as exc:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=503, detail={"status": "not_ready", "database": str(exc)})
+        # El detalle del driver puede contener host, usuario o partes de la URL.
+        # Se conserva en el log del servidor, nunca en la respuesta pública.
+        logger.exception("Database readiness check failed")
+        raise HTTPException(
+            status_code=503,
+            detail={"status": "not_ready", "database": "unavailable"},
+        ) from exc
 
 if __name__ == "__main__":
     import uvicorn

@@ -8,14 +8,18 @@ from app.models.product import Product
 from app.models.traceability import TraceabilityRecord
 from app.models.order import Order, OrderItem
 from app.core.security import get_password_hash
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
+from app.core.config import settings
 
 def seed_database():
+    if settings.ENVIRONMENT == "production":
+        raise RuntimeError("El seed de demostración está bloqueado en producción")
     # Las tablas deben existir previamente mediante `alembic upgrade head`.
     db = SessionLocal()
     try:
         seed_admin_password = os.getenv("SEED_ADMIN_PASSWORD") or secrets.token_urlsafe(16)
-        # 1. Crear usuario admin/productor si no existe
+        # 1. Crear administrador y perfiles demo si no existen
         admin = db.query(User).filter(User.email == "admin@cafetrace.io").first()
         if not admin:
             admin = User(
@@ -32,11 +36,27 @@ def seed_database():
         else:
             print("Usuario admin ya existía")
 
+        demo_password = os.getenv("SEED_DEMO_PASSWORD") or secrets.token_urlsafe(16)
+        if len(demo_password) < 12:
+            raise RuntimeError("SEED_DEMO_PASSWORD debe contener al menos 12 caracteres")
+        demo_users = {}
+        for role in (UserRole.ACCOUNTANT, UserRole.SELLER, UserRole.PRODUCER, UserRole.MARKETING, UserRole.BUYER, UserRole.AUDITOR):
+            email = f"{role.value}@cafetrace.io"
+            user = db.query(User).filter(User.email == email).first()
+            if not user:
+                user = User(email=email, hashed_password=get_password_hash(demo_password), full_name=f"Perfil demo {role.value}", role=role, is_active=True)
+                db.add(user)
+                db.flush()
+            demo_users[role] = user
+        db.commit()
+        print(f"Usuarios demo sincronizados. Contraseña temporal de esta ejecución: {demo_password}")
+
         # 2. Lote de Café Geisha
         coffee_batch = db.query(Batch).filter(Batch.id == 1).first()
         if not coffee_batch:
             coffee_batch = Batch(
-                producer_id=admin.id,
+                producer_id=demo_users[UserRole.PRODUCER].id,
+                seller_id=demo_users[UserRole.SELLER].id,
                 status="ready",
                 details={
                     "origin": "Pitalito, Huila",
@@ -51,11 +71,14 @@ def seed_database():
             db.add(coffee_batch)
             db.commit()
             db.refresh(coffee_batch)
+        else:
+            coffee_batch.producer_id = demo_users[UserRole.PRODUCER].id
+            coffee_batch.seller_id = demo_users[UserRole.SELLER].id
 
         # Limpiar y regenerar registros de trazabilidad del café para que estén completos
         db.query(TraceabilityRecord).filter(TraceabilityRecord.batch_id == coffee_batch.id).delete()
         
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         t1 = TraceabilityRecord(
             batch_id=coffee_batch.id,
             record_type="iot",
@@ -103,7 +126,8 @@ def seed_database():
         meat_batch = db.query(Batch).filter(Batch.id == 2).first()
         if not meat_batch:
             meat_batch = Batch(
-                producer_id=admin.id,
+                producer_id=demo_users[UserRole.PRODUCER].id,
+                seller_id=demo_users[UserRole.SELLER].id,
                 status="ready",
                 details={
                     "origin": "Garzón, Huila",
@@ -118,6 +142,9 @@ def seed_database():
             db.add(meat_batch)
             db.commit()
             db.refresh(meat_batch)
+        else:
+            meat_batch.producer_id = demo_users[UserRole.PRODUCER].id
+            meat_batch.seller_id = demo_users[UserRole.SELLER].id
 
         db.query(TraceabilityRecord).filter(TraceabilityRecord.batch_id == meat_batch.id).delete()
         m1 = TraceabilityRecord(
@@ -142,8 +169,9 @@ def seed_database():
                 batch_id=coffee_batch.id,
                 name="Café Geisha Huila - Edición Especial",
                 description="Cultivado a 1,850 msnm con fermentación anaeróbica de 48 horas. Notas delicadas a jazmín, durazno maduro y miel silvestre.",
-                price=180000.0,
+                price=Decimal("180000.00"),
                 stock=50,
+                seller_id=demo_users[UserRole.SELLER].id,
                 attributes={
                     "category": "coffee",
                     "sca_score": 88.5,
@@ -155,6 +183,7 @@ def seed_database():
             )
             db.add(prod1)
         else:
+            prod1.seller_id = demo_users[UserRole.SELLER].id
             prod1.stock = 50
             prod1.attributes = {
                 "category": "coffee",
@@ -171,8 +200,9 @@ def seed_database():
                 batch_id=meat_batch.id,
                 name="Chorizo Artesanal Campesino con Especias Andinas",
                 description="Derivado cárnico prémium elaborado con cortes seleccionados de cerdo huilense, ahumado natural con leña de café.",
-                price=38000.0,
+                price=Decimal("38000.00"),
                 stock=40,
+                seller_id=demo_users[UserRole.SELLER].id,
                 attributes={
                     "category": "cured_meats",
                     "temperature_control": "2°C - 4°C",
@@ -182,6 +212,7 @@ def seed_database():
             )
             db.add(prod2)
         else:
+            prod2.seller_id = demo_users[UserRole.SELLER].id
             prod2.stock = 40
             prod2.attributes = {
                 "category": "cured_meats",
@@ -204,22 +235,24 @@ def seed_database():
                 shipping_address="Carrera 5 # 12-45, Barrio Los Pinos",
                 city="Pitalito",
                 department="Huila",
-                total_amount=218000.0,
+                total_amount=Decimal("218000.00"),
                 status="confirmed",
+                customer_user_id=demo_users[UserRole.BUYER].id,
+                seller_id=demo_users[UserRole.SELLER].id,
                 payment_method="contra_entrega",
                 notes="Entregar en portería residencial",
                 items=[
                     OrderItem(
                         product_id=prod1.id,
                         quantity=1,
-                        unit_price=180000.0,
-                        subtotal=180000.0
+                        unit_price=Decimal("180000.00"),
+                        subtotal=Decimal("180000.00")
                     ),
                     OrderItem(
                         product_id=prod2.id,
                         quantity=1,
-                        unit_price=38000.0,
-                        subtotal=38000.0
+                        unit_price=Decimal("38000.00"),
+                        subtotal=Decimal("38000.00")
                     )
                 ]
             )

@@ -33,8 +33,7 @@ ROLE_PERMISSIONS: dict[UserRole, set[Permission]] = {
     UserRole.SELLER: {Permission.DASHBOARD_READ, Permission.DASHBOARD_SUMMARY_READ, Permission.CATALOG_READ, Permission.CATALOG_WRITE, Permission.ORDERS_READ, Permission.ORDERS_WRITE, Permission.LOGISTICS_READ, Permission.LOGISTICS_WRITE, Permission.REPORTS_READ, Permission.PROFILE_WRITE},
     UserRole.PRODUCER: {Permission.DASHBOARD_READ, Permission.DASHBOARD_SUMMARY_READ, Permission.CATALOG_READ, Permission.CATALOG_WRITE, Permission.TRACEABILITY_READ, Permission.TRACEABILITY_WRITE, Permission.BLOCKCHAIN_NOTARIZE, Permission.LOGISTICS_READ, Permission.REPORTS_READ, Permission.PROFILE_WRITE},
     UserRole.MARKETING: {Permission.DASHBOARD_READ, Permission.DASHBOARD_SUMMARY_READ, Permission.CATALOG_READ, Permission.MARKETING_WRITE, Permission.REPORTS_READ, Permission.TRACEABILITY_READ, Permission.PROFILE_WRITE},
-    UserRole.BUYER: {Permission.DASHBOARD_READ, Permission.CATALOG_READ, Permission.ORDERS_WRITE, Permission.TRACEABILITY_READ, Permission.PROFILE_WRITE},
-    UserRole.CUSTOMER: {Permission.DASHBOARD_READ, Permission.CATALOG_READ, Permission.ORDERS_WRITE, Permission.TRACEABILITY_READ, Permission.PROFILE_WRITE},
+    UserRole.BUYER: {Permission.DASHBOARD_READ, Permission.CATALOG_READ, Permission.ORDERS_READ, Permission.ORDERS_WRITE, Permission.PROFILE_WRITE},
     UserRole.AUDITOR: {Permission.DASHBOARD_READ, Permission.DASHBOARD_SUMMARY_READ, Permission.USERS_READ, Permission.ACCOUNTING_READ, Permission.LOGISTICS_READ, Permission.TRACEABILITY_READ, Permission.REPORTS_READ, Permission.AUDIT_READ, Permission.PROFILE_WRITE},
 }
 

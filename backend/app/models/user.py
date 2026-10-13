@@ -12,7 +12,6 @@ class UserRole(str, enum.Enum):
     MARKETING = "marketing"
     BUYER = "buyer"
     AUDITOR = "auditor"
-    CUSTOMER = "customer"
 
 class User(Base):
     __tablename__ = "users"
@@ -24,7 +23,7 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     # PostgreSQL usa el tipo nativo `userrole`; SQLite degrada automáticamente
     # este Enum a VARCHAR y conserva compatibilidad con desarrollo local.
-    role = Column(Enum(UserRole, name="userrole", native_enum=True, length=10), default=UserRole.CUSTOMER)
+    role = Column(Enum(UserRole, name="userrole", native_enum=True, length=10), default=UserRole.BUYER)
     access_code_hash = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -44,3 +43,19 @@ class PasswordResetRequest(Base):
 
     user = relationship("User", foreign_keys=[user_id])
     reviewer = relationship("User", foreign_keys=[reviewed_by])
+
+
+class RefreshSession(Base):
+    __tablename__ = "refresh_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    token_hash = Column(String, nullable=False, unique=True, index=True)
+    family_id = Column(String, nullable=False, index=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+    replaced_by_hash = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    last_used_at = Column(DateTime(timezone=True), nullable=True)
+
+    user = relationship("User")

@@ -1,5 +1,5 @@
 from app.core.database import Base
-from app.models.user import User, PasswordResetRequest
+from app.models.user import User, PasswordResetRequest, RefreshSession
 from app.models.batch import Batch
 from app.models.product import Product
 from app.models.traceability import TraceabilityRecord, IoTDevice, AuditEvent, BlockchainNotarization

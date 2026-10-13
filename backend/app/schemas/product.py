@@ -13,6 +13,7 @@ class ProductBase(BaseModel):
 
 class ProductCreate(ProductBase):
     batch_id: int
+    seller_id: Optional[int] = None
 
 class ProductUpdate(BaseModel):
     name: Optional[str] = None
@@ -21,10 +22,12 @@ class ProductUpdate(BaseModel):
     stock: Optional[int] = Field(None, ge=0)
     attributes: Optional[Dict[str, Any]] = None
     image_url: Optional[str] = None
+    seller_id: Optional[int] = None
 
 class Product(ProductBase):
     id: int
     batch_id: int
+    seller_id: Optional[int] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 

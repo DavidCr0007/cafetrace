@@ -16,9 +16,9 @@
 
 ## Roles
 
-`admin` tiene todos los permisos. `accountant` gestiona contabilidad y consulta operación financiera. `seller` gestiona catálogo comercial, pedidos y despachos. `producer` gestiona sus lotes, productos, IoT y notarizaciones. `marketing` consulta trazabilidad/catálogo y gestiona acciones comerciales. `buyer` y el rol legado `customer` compran, consultan catálogo/trazabilidad y gestionan su perfil. `auditor` tiene acceso de solo lectura a usuarios, reportes, logística, trazabilidad y auditoría.
+`admin` tiene todos los permisos. `accountant` gestiona contabilidad y consulta operación financiera. `seller` gestiona su catálogo comercial, pedidos asignados y despachos. `producer` gestiona sus lotes, productos, IoT y notarizaciones. `marketing` consulta trazabilidad/catálogo y gestiona acciones comerciales. `buyer` compra, consulta sus pedidos y gestiona su perfil. `auditor` tiene acceso de solo lectura a usuarios, reportes, logística, trazabilidad y auditoría. El rol legado `customer` se migra a `buyer` y ya no puede asignarse.
 
-La matriz ejecutable está en `backend/app/core/permissions.py` y puede consultarse por un administrador mediante `GET /api/v1/admin/access-matrix`. Cada usuario autenticado puede consultar sus permisos efectivos en `GET /api/v1/users/me/access`. Todos los perfiles tienen `dashboard.read`; el resumen global de operación usa el permiso adicional `dashboard.summary.read` y no se expone a compradores/clientes.
+La matriz ejecutable está en `backend/app/core/permissions.py` y puede consultarse por un administrador mediante `GET /api/v1/admin/access-matrix`. Cada usuario autenticado puede consultar sus permisos efectivos en `GET /api/v1/users/me/access`. Todos los perfiles tienen `dashboard.read`; el resumen global de operación usa el permiso adicional `dashboard.summary.read` y no se expone a compradores.
 
 ## Recuperación de acceso
 
@@ -37,4 +37,7 @@ El código de acceso se rota desde `POST /api/v1/admin/users/{user_id}/access-co
 - El registro, el cambio de contraseña y la aprobación de recuperación exigen contraseñas de mínimo 12 caracteres.
 - No se permite desactivar al administrador actual ni dejar el sistema sin un administrador activo.
 - Los cambios de rol, estado, códigos y contraseñas generan eventos de auditoría.
-- Se mantienen los roles históricos `admin`, `producer` y `customer`; `customer` es equivalente operativo a `buyer` para compatibilidad.
+- El access token expira en un máximo de 60 minutos; la sesión prolongada usa
+  refresh tokens opacos, rotativos y revocables en cookie `HttpOnly`.
+- La desactivación, el cambio de contraseña y la recuperación aprobada revocan
+  las sesiones de actualización vigentes del usuario.

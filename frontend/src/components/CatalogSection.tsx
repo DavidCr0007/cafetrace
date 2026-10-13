@@ -3,14 +3,16 @@
 import React, { useState } from "react";
 import { Product } from "@/lib/api";
 import { ProductCard } from "@/components/ProductCard";
-import { QrCode, Filter, Sparkles } from "lucide-react";
+import Link from "next/link";
+import { CircleAlert, QrCode, Filter } from "lucide-react";
 
 interface CatalogSectionProps {
   products: Product[];
   isSample: boolean;
+  backendOnline: boolean;
 }
 
-export function CatalogSection({ products, isSample }: CatalogSectionProps) {
+export function CatalogSection({ products, isSample, backendOnline }: CatalogSectionProps) {
   const [selectedCategory, setSelectedCategory] = useState<"all" | "coffee" | "cured_meats">("all");
 
   const filteredProducts = products.filter((p) => {
@@ -25,19 +27,35 @@ export function CatalogSection({ products, isSample }: CatalogSectionProps) {
   });
 
   return (
-    <section className="max-w-7xl mx-auto px-6 pt-12">
+    <section className="mx-auto max-w-7xl px-5 pt-16 sm:px-8">
+      {!backendOnline && (
+        <div role="status" className="mb-8 flex flex-col gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-950 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <CircleAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" aria-hidden="true" />
+            <div>
+              <p className="text-sm font-black">Inventario temporalmente no disponible</p>
+              <p className="mt-1 text-xs leading-5 text-amber-900/75">
+                La API o PostgreSQL no respondió a la comprobación de disponibilidad. {isSample ? "Los productos visibles son muestras de interfaz." : "No se muestran datos para evitar confundir una caída con un catálogo vacío."}
+              </p>
+            </div>
+          </div>
+          <Link href="/diagnostics" className="inline-flex shrink-0 items-center justify-center rounded-xl border border-amber-300 bg-white px-4 py-2 text-xs font-black text-amber-950 transition hover:border-amber-500">
+            Abrir diagnóstico
+          </Link>
+        </div>
+      )}
       {/* Encabezado del catálogo y filtros */}
       <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 pb-6 border-b border-stone-200 gap-6">
         <div>
           <div className="flex items-center gap-2 text-xs uppercase tracking-wider font-extrabold text-emerald-700">
             <QrCode className="w-4 h-4" />
-            <span>Comercio Directo Sin Intermediarios</span>
+            <span>Catálogo conectado a lotes</span>
           </div>
           <h2 className="text-3xl md:text-4xl font-black text-stone-950 mt-1 tracking-tight">
-            Catálogo de Productos Certificados
+            Productos con historia consultable
           </h2>
           <p className="text-xs md:text-sm text-stone-500 mt-1 max-w-xl">
-            Cada producto cuenta con un lote único respaldado por telemetría IoT y sello inmutable en Polygon PoS.
+            Consulta la información disponible de cada lote. El pasaporte distingue evidencia declarada, registrada y verificada.
           </p>
         </div>
 
@@ -66,7 +84,7 @@ export function CatalogSection({ products, isSample }: CatalogSectionProps) {
                 : "text-stone-500 hover:text-stone-800"
             }`}
           >
-            <span>☕ Café Especial SCA</span>
+            <span>☕ Café especial</span>
           </button>
 
           <button
@@ -92,9 +110,10 @@ export function CatalogSection({ products, isSample }: CatalogSectionProps) {
           ))}
         </div>
       ) : (
-        <div className="p-12 text-center bg-stone-50 rounded-3xl border border-dashed border-stone-300">
+        <div className="rounded-3xl border border-dashed border-stone-300 bg-stone-50 p-12 text-center">
           <Filter className="w-10 h-10 text-stone-300 mx-auto mb-3" />
-          <p className="text-sm font-bold text-stone-700">No hay productos en esta categoría</p>
+          <p className="text-sm font-bold text-stone-700">{backendOnline ? "Aún no hay productos en esta categoría" : "No fue posible consultar el inventario"}</p>
+          <p className="mt-1 text-xs text-stone-500">{backendOnline ? "Prueba con otra categoría o vuelve cuando se publique inventario." : "Inicia PostgreSQL y la API; después recarga esta página."}</p>
           <button
             onClick={() => setSelectedCategory("all")}
             className="mt-3 px-4 py-1.5 bg-stone-900 text-white text-xs font-semibold rounded-xl"

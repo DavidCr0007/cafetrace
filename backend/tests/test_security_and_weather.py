@@ -5,9 +5,9 @@ from app.schemas.order import OrderCreate
 from app.core.blockchain import compute_batch_data_hash
 from app.schemas.traceability import IoTIngest
 from datetime import datetime, timezone
-from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from app.main import app
+from tests.asgi_client import ASGITestClient
 
 
 def test_weather_location_is_icononzo():
@@ -43,7 +43,7 @@ def test_iot_payload_requires_recent_measurement_shape():
 
 
 def test_cors_uses_explicit_allowlist_without_regex_wildcards():
-    client = TestClient(app)
+    client = ASGITestClient(app)
     allowed = client.options(
         "/api/v1/auth/login",
         headers={
@@ -64,10 +64,40 @@ def test_cors_uses_explicit_allowlist_without_regex_wildcards():
     assert rejected.status_code == 400
 
 
+def test_readiness_requires_database_and_hides_driver_details(monkeypatch):
+    from app.core import database
+
+    class BrokenEngine:
+        def connect(self):
+            raise RuntimeError("postgresql://private-user:private-password@internal-host/database")
+
+    monkeypatch.setattr(database, "engine", BrokenEngine())
+    response = ASGITestClient(app).get("/health/ready")
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": {"status": "not_ready", "database": "unavailable"}
+    }
+    assert "private-password" not in response.text
+
+
 def test_production_settings_reject_local_cors_and_missing_secret():
     with pytest.raises(ValidationError):
         Settings(_env_file=None, ENVIRONMENT="production", SECRET_KEY="x" * 32, CORS_ORIGINS=["http://localhost:3000"])
     with pytest.raises(ValidationError):
         Settings(_env_file=None, ENVIRONMENT="production", SECRET_KEY="", CORS_ORIGINS=["https://app.cafetrace.co"])
-    production = Settings(_env_file=None, ENVIRONMENT="production", SECRET_KEY="x" * 32, CORS_ORIGINS=["https://app.cafetrace.co"])
+    production = Settings(
+        _env_file=None,
+        ENVIRONMENT="production",
+        SECRET_KEY="x" * 32,
+        CORS_ORIGINS=["https://app.cafetrace.co"],
+        REFRESH_COOKIE_SECURE=True,
+    )
     assert production.CORS_ORIGINS == ["https://app.cafetrace.co"]
+
+
+def test_sqlite_is_rejected_and_access_tokens_are_short_lived():
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, DATABASE_URL="sqlite:///./cafetrace.db")
+    configured = Settings(_env_file=None, DATABASE_URL="postgresql://user:pass@localhost/cafetrace")
+    assert configured.ACCESS_TOKEN_EXPIRE_MINUTES <= 60

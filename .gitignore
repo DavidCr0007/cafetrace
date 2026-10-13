@@ -24,6 +24,7 @@
 *.tsbuildinfo
 backups/
 ci.db
+.runtime/
 
 # Python
 __pycache__/

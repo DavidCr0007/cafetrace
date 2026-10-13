@@ -4,11 +4,11 @@ from typing import List
 from app.core.database import get_db
 from app.api.deps import get_current_producer, get_current_user
 from app.core.permissions import Permission, has_permission
-from app.models.user import User as UserModel
+from app.models.user import User as UserModel, UserRole
 from app.models.batch import Batch as BatchModel
 from app.models.product import Product as ProductModel
 from app.models.traceability import TraceabilityRecord as TraceabilityModel
-from app.schemas.batch import Batch, BatchCreate
+from app.schemas.batch import Batch, BatchCreate, BatchUpdate
 from app.schemas.traceability import TraceabilityRecord, TraceabilityRecordCreate
 from app.core.blockchain import compute_batch_data_hash, notarize_batch, verify_batch
 from app.models.traceability import BlockchainNotarization
@@ -21,7 +21,7 @@ def _internal_batch_access(batch: BatchModel, current_user: UserModel) -> None:
     """Protege telemetría y metadatos operativos contra IDOR entre productores."""
     if current_user.role.value == "admin":
         return
-    if current_user.role.value == "auditor" and has_permission(current_user, Permission.TRACEABILITY_READ):
+    if current_user.role in {UserRole.AUDITOR, UserRole.MARKETING} and has_permission(current_user, Permission.TRACEABILITY_READ):
         return
     if current_user.role.value == "producer" and batch.producer_id == current_user.id:
         return
@@ -33,8 +33,19 @@ def _internal_batch_access(batch: BatchModel, current_user: UserModel) -> None:
 def create_batch(batch: BatchCreate, db: Session = Depends(get_db), current_user: UserModel = Depends(get_current_producer)):
     if current_user.role.value != "admin" and batch.producer_id != current_user.id:
         raise HTTPException(status_code=403, detail="El productor solo puede crear sus propios lotes")
+    producer = db.query(UserModel).filter(
+        UserModel.id == batch.producer_id,
+        UserModel.role == UserRole.PRODUCER,
+        UserModel.is_active.is_(True),
+    ).first()
+    if not producer:
+        raise HTTPException(status_code=422, detail="El lote debe pertenecer a un productor activo")
+    if batch.seller_id and not db.query(UserModel).filter(UserModel.id == batch.seller_id, UserModel.role == UserRole.SELLER, UserModel.is_active.is_(True)).first():
+        raise HTTPException(status_code=422, detail="El responsable comercial debe ser un vendedor activo")
     db_batch = BatchModel(**batch.model_dump())
     db.add(db_batch)
+    db.flush()
+    write_audit(db, "traceability.batch_created", "batch", str(db_batch.id), current_user, {"producer_id": db_batch.producer_id, "seller_id": db_batch.seller_id})
     db.commit()
     db.refresh(db_batch)
     return db_batch
@@ -47,7 +58,7 @@ def read_batches(
     db: Session = Depends(get_db),
     current_user: UserModel = Depends(get_current_user),
 ):
-    if current_user.role.value in {"admin", "auditor"}:
+    if current_user.role in {UserRole.ADMIN, UserRole.AUDITOR, UserRole.MARKETING}:
         batches = db.query(BatchModel).offset(skip).limit(limit).all()
     elif current_user.role.value == "producer":
         batches = db.query(BatchModel).filter(BatchModel.producer_id == current_user.id).offset(skip).limit(limit).all()
@@ -67,6 +78,29 @@ def read_batch(
     _internal_batch_access(batch, current_user)
     return batch
 
+
+@router.patch("/{batch_id}", response_model=Batch)
+def update_batch(
+    batch_id: int,
+    payload: BatchUpdate,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_producer),
+):
+    batch = db.query(BatchModel).filter(BatchModel.id == batch_id).first()
+    if not batch:
+        raise HTTPException(status_code=404, detail="Lote no encontrado")
+    if current_user.role != UserRole.ADMIN and batch.producer_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Lote no encontrado")
+    before = {"status": batch.status, "seller_id": batch.seller_id}
+    for key, value in payload.model_dump(exclude_unset=True).items():
+        if key == "seller_id" and value is not None and not db.query(UserModel).filter(UserModel.id == value, UserModel.role == UserRole.SELLER, UserModel.is_active.is_(True)).first():
+            raise HTTPException(status_code=422, detail="El responsable comercial debe ser un vendedor activo")
+        setattr(batch, key, value)
+    write_audit(db, "traceability.batch_updated", "batch", str(batch.id), current_user, {"before": before})
+    db.commit()
+    db.refresh(batch)
+    return batch
+
 # Traceability endpoints related to batches
 @router.post("/{batch_id}/records", response_model=TraceabilityRecord)
 def create_batch_record(batch_id: int, record: TraceabilityRecordCreate, db: Session = Depends(get_db), current_user: UserModel = Depends(get_current_producer)):
@@ -79,6 +113,8 @@ def create_batch_record(batch_id: int, record: TraceabilityRecordCreate, db: Ses
         raise HTTPException(status_code=403, detail="No autorizado para este lote")
     db_record = TraceabilityModel(**record.model_dump())
     db.add(db_record)
+    db.flush()
+    write_audit(db, "traceability.record_created", "batch", str(batch_id), current_user, {"record_id": db_record.id, "record_type": db_record.record_type})
     db.commit()
     db.refresh(db_record)
     return db_record

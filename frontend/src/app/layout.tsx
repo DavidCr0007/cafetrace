@@ -4,8 +4,8 @@ import { CartProvider } from "@/context/CartContext";
 import { CartDrawer } from "@/components/CartDrawer";
 
 export const metadata: Metadata = {
-  title: "CaféTrace IA - Ecosistema de Trazabilidad y E-commerce Prémium",
-  description: "Plataforma de trazabilidad agrícola inmutable con Polygon PoS, telemetría IoT y venta directa B2C del Huila.",
+  title: "CaféTrace — Trazabilidad y operación agroalimentaria",
+  description: "Consulta lotes, evidencia de origen, telemetría y operación comercial desde una plataforma con acceso por roles.",
 };
 
 export default function RootLayout({
@@ -14,8 +14,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es">
-      <body>
+    <html lang="es-CO">
+      <body className="antialiased">
         <CartProvider>
           {children}
           <CartDrawer />

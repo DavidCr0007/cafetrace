@@ -7,6 +7,8 @@ from app.core.config import settings
 import bcrypt
 import hashlib
 import hmac
+import secrets
+import uuid
 
 # Fix for passlib expecting bcrypt.__about__.__version__
 if not hasattr(bcrypt, "__about__"):
@@ -40,6 +42,18 @@ def create_access_token(
         expire = datetime.now(timezone.utc) + timedelta(
             minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
         )
-    to_encode = {"exp": expire, "sub": str(subject)}
+    to_encode = {"exp": expire, "sub": str(subject), "type": "access"}
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
+
+
+def create_refresh_token() -> str:
+    return secrets.token_urlsafe(48)
+
+
+def hash_refresh_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def create_refresh_family_id() -> str:
+    return str(uuid.uuid4())

@@ -8,6 +8,7 @@ class Product(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     batch_id = Column(Integer, ForeignKey("batches.id"))
+    seller_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     name = Column(String, nullable=False)
     description = Column(String)
     price = Column(Numeric(12, 2), nullable=False)
@@ -21,3 +22,4 @@ class Product(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     batch = relationship("Batch", back_populates="products")
+    seller = relationship("User")

@@ -14,14 +14,26 @@ pip install -r requirements.txt
 test -f .env || cp .env.example .env
 ```
 
-Configura `DATABASE_URL`, `SECRET_KEY`, CORS y, si aplica, las variables blockchain. SQLite sirve para desarrollo; PostgreSQL es el destino de integración/producción. Los flujos de login y recuperación se limitan por IP; ajusta `AUTH_RATE_LIMIT_ATTEMPTS` y `AUTH_RATE_LIMIT_WINDOW_SECONDS` según el entorno.
+Configura `DATABASE_URL`, `SECRET_KEY`, CORS y, si aplica, las variables blockchain. PostgreSQL es obligatorio en todos los entornos operativos; SQLite no está soportado. Los flujos de login y recuperación se limitan por IP; ajusta `AUTH_RATE_LIMIT_ATTEMPTS` y `AUTH_RATE_LIMIT_WINDOW_SECONDS` según el entorno.
 
 ## Protocolo de arranque
+
+Desde la raíz inicia primero la base local aislada:
+
+```bash
+./ops/dev-db.sh start
+```
+
+Después, desde `backend/`:
 
 ```bash
 alembic upgrade head
 uvicorn app.main:app --reload
 ```
+
+La configuración de desarrollo usa `127.0.0.1:55432`. Comprueba la cadena
+completa con `curl http://localhost:8000/health/ready`; un 200 confirma tanto
+FastAPI como PostgreSQL. `GET /health` solo comprueba el proceso HTTP.
 
 El backend no crea tablas automáticamente. El seed es demo y debe ejecutarse solo con datos no productivos:
 
