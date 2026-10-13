@@ -8,7 +8,7 @@ Plataforma de trazabilidad agrícola, comercio electrónico, IoT, blockchain y l
 - `frontend/`: aplicación web Next.js, catálogo, trazabilidad y dashboard por rol.
 - `blockchain/`: contrato Solidity para notarización en Polygon Amoy.
 - `docs/`: modelos de acceso, seguridad, arquitectura y finanzas.
-- `ops/`: backup local de SQLite/PostgreSQL.
+- `ops/`: PostgreSQL local aislado, respaldos y utilidades operativas.
 - `loadtests/`: escenario base de Locust.
 
 ## Requisitos
@@ -16,7 +16,7 @@ Plataforma de trazabilidad agrícola, comercio electrónico, IoT, blockchain y l
 - Python 3.10+; recomendado Python 3.12.
 - Node.js 20.9+; recomendado Node.js 20 LTS.
 - PostgreSQL 16 para desarrollo, pruebas, integración y producción.
-- Docker y Docker Compose solo para el entorno contenedorizado.
+- Docker Engine con el complemento `docker compose`, solo para el entorno contenedorizado.
 
 ## Desarrollo local
 
@@ -155,10 +155,66 @@ claves, certificados y repositorios Git anidados.
 
 ## Docker Compose
 
-Copiar `.env.example` a `.env` y reemplazar `POSTGRES_PASSWORD` y `SECRET_KEY`:
+### Comprobación previa
+
+La presencia del cliente no garantiza que el daemon esté funcionando. Valida
+por separado el cliente, Compose y el servicio:
 
 ```bash
-docker compose up --build
+docker --version
+docker compose version
+docker info
+docker compose --env-file .env.example config --quiet
+```
+
+- Si los dos primeros comandos responden, Docker y Compose están instalados.
+- Si `docker info` falla, revisa primero `systemctl status docker.service` y
+  `journalctl -u docker.service -n 100 --no-pager`. No modifiques grupos de
+  usuario antes de confirmar que el daemon está activo.
+- `docker compose ... config --quiet` valida la interpolación y estructura del
+  compose sin descargar imágenes ni iniciar contenedores.
+
+En Arch Linux, un kernel actualizado pendiente de reinicio puede dejar al
+kernel activo sin sus módulos y hacer que Docker falle al crear la red bridge
+con errores de `iptables`, `addrtype` o `iptable_nat`. Compruébalo con:
+
+```bash
+uname -r
+pacman -Q linux
+modinfo xt_addrtype
+```
+
+Si la versión instalada no coincide con `uname -r`, reinicia el sistema para
+cargar el kernel instalado. Después del reinicio:
+
+```bash
+sudo systemctl reset-failed docker.service docker.socket
+sudo systemctl enable --now docker.service
+docker info
+```
+
+Solo si el servicio está activo y todavía aparece `permission denied`, revisa
+los permisos de `/var/run/docker.sock` y la pertenencia al grupo `docker`. Ten
+en cuenta que ese grupo concede privilegios equivalentes a administración del
+host.
+
+### Arranque contenedorizado
+
+Copia `.env.example` a `.env`, reemplaza `POSTGRES_PASSWORD`, `SECRET_KEY` y la
+allowlist `CORS_ORIGINS`, y valida la configuración antes de levantarla:
+
+```bash
+test -f .env || cp .env.example .env
+# Edita .env antes de continuar.
+docker compose --env-file .env config --quiet
+docker compose --env-file .env up --build
+```
+
+Estado y apagado ordenado:
+
+```bash
+docker compose ps
+docker compose down
 ```
 
 Backend: `8000`; frontend: `3000`; PostgreSQL queda disponible solo para los
