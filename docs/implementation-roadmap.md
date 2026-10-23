@@ -151,6 +151,14 @@ lint, tipos o build fallidos.
 Puerta final: pipeline local reproducible, comparación antes/después y lista explícita
 de cualquier dependencia externa que impida validar una función.
 
+## Reorganización posterior (23-oct-2026)
+
+Las rutas `backend/app/models|schemas|services|api/v1/endpoints|core/{permissions,blockchain}`
+citadas en las fases anteriores se movieron con `git mv` a `backend/app/modules/<dominio>/`
+(ver `backend/README.md`). La API pública no cambió: las 55 rutas son idénticas.
+También se eliminó toda referencia a Huila, el puntaje SCA se envía ×10 y los lotes
+son tipados por producto.
+
 ## Archivos fuera de alcance
 
 No se modificarán `blockchain/contracts/CafeTraceRegistry.sol`, firmware inexistente,
@@ -160,8 +168,8 @@ reales y bases de datos del usuario no se leerán ni se reescribirán.
 ## Estado verificado al cierre
 
 - PostgreSQL: ciclo `upgrade head → check → downgrade base → upgrade head` correcto.
-- Backend: 38 pruebas verdes y 70,87 % de cobertura global; el CI bloquea por
-  debajo de 70 % mientras se amplía progresivamente al objetivo de 80 %.
+- Backend: 59 pruebas verdes y 80,6 % de cobertura global; el CI bloquea por
+  debajo de 70 %.
 - Frontend: ESLint, TypeScript y build de producción verdes con Next.js 16.
 - Perfiles: recorrido real en navegador de los siete roles vigentes, sin errores
   de consola y con navegación limitada por los permisos entregados por la API.
@@ -169,4 +177,4 @@ reales y bases de datos del usuario no se leerán ni se reescribirán.
 - Responsive: dashboard sin desbordamiento horizontal a 360 px.
 
 Pendiente de una fase posterior: pruebas E2E persistentes con Playwright en CI,
-cobertura global de 80 % y 95 % específico en autenticación/RBAC/contabilidad.
+95 % específico en autenticación/RBAC/contabilidad.

@@ -23,9 +23,15 @@ npm run dev
 Rutas principales:
 
 - `/`: catálogo público.
-- `/trace/[batchId]`: pasaporte del lote y clima de Icononzo.
+- `/trace/[batchId]`: pasaporte del lote construido con los datos tipados del backend (sin valores fijos) y clima de Icononzo.
 - `/dashboard`: dashboard adaptado a los permisos del usuario.
 - `/admin`: panel administrativo.
+
+## Estructura relevante
+
+- `src/lib/api.ts`: cliente y tipos del backend.
+- `src/lib/traceability.ts`: etiquetas por tipo de producto y validación del formulario de lotes, que replica la del backend.
+- `src/lib/access.ts`: navegación según los permisos entregados por la API.
 
 ## QA local
 

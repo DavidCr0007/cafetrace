@@ -41,6 +41,27 @@ El backend no crea tablas automáticamente. El seed es demo y debe ejecutarse so
 python -m scripts.seed
 ```
 
+## Estructura por módulos
+
+El código vive en `app/modules/`, un paquete por dominio, cada uno con sus
+`models.py`, `schemas.py`, `service.py` y routers:
+
+| Módulo | Contenido |
+|---|---|
+| `identity` | Usuarios, sesiones, autenticación, permisos y administración de cuentas |
+| `audit` | Eventos de auditoría y vistas de supervisión |
+| `traceability` | Lotes tipados, registros de trazabilidad e IoT |
+| `blockchain` | Hash, notarización y verificación |
+| `catalog` | Productos |
+| `orders` | Pedidos y su ámbito por rol |
+| `payments` | Intención de pago manual |
+| `logistics` | Despachos y cadena de frío |
+| `accounting` | Reglas, liquidaciones y nómina |
+| `insights` | Clima y baseline de calidad |
+
+`app/modules/registry.py` importa todos los modelos para Alembic y
+`app/api/v1/api.py` monta los routers. Un módulo nuevo debe registrarse en ambos.
+
 ## Rutas base
 
 - `GET /health` y `GET /health/ready`.
@@ -48,7 +69,8 @@ python -m scripts.seed
 - `/api/v1/auth`: login, registro y recuperación de contraseña.
 - `/api/v1/users`: perfil, permisos efectivos y usuarios autorizados.
 - `/api/v1/admin`: resumen, matriz de acceso, auditoría y gestión de cuentas.
-- `/api/v1/batches`: lotes, trazabilidad, notarización y verificación.
+- `/api/v1/batches`: lotes tipados por tipo de producto, trazabilidad, notarización y verificación.
+- `/api/v1/products`: catálogo de productos.
 - `/api/v1/iot`: dispositivos e ingestión autenticada.
 - `/api/v1/orders`: pedidos y estados.
 - `/api/v1/operations`: pagos manuales y logística.
@@ -56,9 +78,9 @@ python -m scripts.seed
 - `/api/v1/weather`: pronóstico de Icononzo, Tolima.
 - `/api/v1/ai`: baseline explicable de calidad.
 
-Los recursos internos de `/api/v1/batches` requieren sesión: productores solo
-pueden consultar sus lotes; administración y auditoría pueden revisar el
-conjunto. El pasaporte público se expone por `/batches/{id}/timeline`.
+Los recursos internos de `/api/v1/batches` requieren sesión: los productores solo
+consultan sus lotes; quien tenga el permiso `traceability.read_all`
+(administración y auditoría) revisa el conjunto. El pasaporte público se expone por `/batches/{id}/timeline`.
 
 ## Migraciones y pruebas
 
@@ -67,6 +89,11 @@ alembic upgrade head
 alembic check
 pytest -q
 ```
+
+`pytest` usa por defecto la base `<base>_test` del mismo servidor
+(`ops/dev-db.sh start` la crea). Puedes indicar otra con `TEST_DATABASE_URL`;
+si su nombre no termina en `_test` o `_ci`, pytest se detiene antes de borrar
+datos. Para cobertura: `pytest --cov=app -q` (el CI exige 70 %).
 
 Para crear una revisión:
 
