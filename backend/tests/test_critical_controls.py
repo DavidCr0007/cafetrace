@@ -5,58 +5,18 @@ from datetime import datetime, timezone
 
 import pytest
 import jwt
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
-from app.core.database import Base, get_db
-from app.core.permissions import Permission, ROLE_PERMISSIONS
-from app.core.rate_limit import auth_rate_limiter
-from app.core.security import create_access_token, get_password_hash, verify_password
-from app.main import app
-from app.models.batch import Batch
-from app.models.operations import OrderSettlement
-from app.models.order import Order, OrderItem
-from app.models.product import Product
-from app.models.traceability import AuditEvent, IoTDevice, TraceabilityRecord
-from app.models.user import RefreshSession, User, UserRole
+from app.modules.identity.permissions import Permission, ROLE_PERMISSIONS
+from app.core.security import verify_password
+from app.modules.traceability.models import Batch
+from app.modules.accounting.models import OrderSettlement
+from app.modules.orders.models import Order, OrderItem
+from app.modules.catalog.models import Product
+from app.modules.audit.models import AuditEvent
+from app.modules.traceability.models import IoTDevice, TraceabilityRecord
+from app.modules.identity.models import RefreshSession, User, UserRole
 from app.core.config import settings
-from tests.asgi_client import ASGITestClient
-
-
-@pytest.fixture
-def client_and_session():
-    from app.core.config import settings
-    engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True)
-    Base.metadata.drop_all(bind=engine)
-    testing_session = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    Base.metadata.create_all(bind=engine)
-
-    def override_get_db():
-        db = testing_session()
-        try:
-            yield db
-        finally:
-            db.close()
-
-    app.dependency_overrides[get_db] = override_get_db
-    auth_rate_limiter.clear()
-    with ASGITestClient(app) as client:
-        yield client, testing_session
-    auth_rate_limiter.clear()
-    app.dependency_overrides.clear()
-    Base.metadata.drop_all(bind=engine)
-    engine.dispose()
-
-
-def _user(session, email: str, role: UserRole) -> User:
-    user = User(email=email, full_name=email, role=role, is_active=True, hashed_password=get_password_hash("correct-horse-battery-staple"))
-    session.add(user)
-    session.flush()
-    return user
-
-
-def _headers(user: User) -> dict[str, str]:
-    return {"Authorization": f"Bearer {create_access_token(user.id)}"}
+from tests.conftest import _headers, _user
 
 
 def test_producer_cannot_read_another_producers_internal_batch_or_records(client_and_session):
@@ -64,8 +24,8 @@ def test_producer_cannot_read_another_producers_internal_batch_or_records(client
     session = session_factory()
     producer_a = _user(session, "producer-a@example.com", UserRole.PRODUCER)
     producer_b = _user(session, "producer-b@example.com", UserRole.PRODUCER)
-    own_batch = Batch(producer_id=producer_a.id, status="harvested", details={"origin": "Icononzo"})
-    other_batch = Batch(producer_id=producer_b.id, status="harvested", details={"origin": "Icononzo"})
+    own_batch = Batch(product_type="coffee", producer_id=producer_a.id, status="harvested", details={"origin": "Icononzo"})
+    other_batch = Batch(product_type="coffee", producer_id=producer_b.id, status="harvested", details={"origin": "Icononzo"})
     session.add_all([own_batch, other_batch])
     session.commit()
     own_id, other_id = own_batch.id, other_batch.id
@@ -187,7 +147,7 @@ def test_settlement_is_idempotent_and_cancelled_orders_are_rejected(client_and_s
     session = session_factory()
     accountant = _user(session, "accountant@example.com", UserRole.ACCOUNTANT)
     producer = _user(session, "producer@example.com", UserRole.PRODUCER)
-    batch = Batch(producer_id=producer.id, status="ready", details={})
+    batch = Batch(product_type="coffee", producer_id=producer.id, status="ready", details={})
     product = Product(batch=batch, name="Café", price=Decimal("10000.00"), stock=10, attributes={"category": "coffee", "direct_cost": "3500"})
     order = Order(customer_name="Cliente", customer_email="client@example.com", customer_phone="3000000000", shipping_address="Calle 1", city="Icononzo", total_amount=Decimal("10000.00"), status="confirmed", items=[OrderItem(product=product, quantity=1, unit_price=Decimal("10000.00"), subtotal=Decimal("10000.00"))])
     cancelled = Order(customer_name="Cancelado", customer_email="cancelled@example.com", customer_phone="3000000001", shipping_address="Calle 2", city="Icononzo", total_amount=Decimal("10000.00"), status="cancelled")
@@ -219,7 +179,7 @@ def test_concurrent_settlement_requests_create_one_record(client_and_session):
     session = session_factory()
     accountant = _user(session, "concurrent-accountant@example.com", UserRole.ACCOUNTANT)
     producer = _user(session, "concurrent-producer@example.com", UserRole.PRODUCER)
-    batch = Batch(producer_id=producer.id, status="ready", details={})
+    batch = Batch(product_type="coffee", producer_id=producer.id, status="ready", details={})
     product = Product(batch=batch, name="Café concurrente", price=Decimal("10000.00"), stock=10, attributes={"category": "coffee", "direct_cost": "3500"})
     order = Order(customer_name="Cliente", customer_email="concurrent@example.com", customer_phone="3000000002", shipping_address="Calle 3", city="Icononzo", total_amount=Decimal("10000.00"), status="confirmed", items=[OrderItem(product=product, quantity=1, unit_price=Decimal("10000.00"), subtotal=Decimal("10000.00"))])
     session.add_all([batch, product, order])
@@ -302,8 +262,8 @@ def test_seller_catalog_and_order_scope_are_enforced(client_and_session):
     producer = _user(session, "scope-producer@example.com", UserRole.PRODUCER)
     seller = _user(session, "scope-seller@example.com", UserRole.SELLER)
     other_seller = _user(session, "scope-other-seller@example.com", UserRole.SELLER)
-    assigned = Batch(producer_id=producer.id, seller_id=seller.id, status="ready", details={})
-    unassigned = Batch(producer_id=producer.id, seller_id=other_seller.id, status="ready", details={})
+    assigned = Batch(product_type="coffee", producer_id=producer.id, seller_id=seller.id, status="ready", details={})
+    unassigned = Batch(product_type="coffee", producer_id=producer.id, seller_id=other_seller.id, status="ready", details={})
     session.add_all([assigned, unassigned]); session.commit()
     assigned_id, unassigned_id = assigned.id, unassigned.id
     seller_headers = _headers(seller)
@@ -322,7 +282,7 @@ def test_buyer_sees_only_owned_orders_and_payment_requires_ownership(client_and_
     buyer = _user(session, "buyer-owner@example.com", UserRole.BUYER)
     other = _user(session, "buyer-other@example.com", UserRole.BUYER)
     producer = _user(session, "buyer-producer@example.com", UserRole.PRODUCER)
-    batch = Batch(producer_id=producer.id, status="ready", details={})
+    batch = Batch(product_type="coffee", producer_id=producer.id, status="ready", details={})
     product = Product(batch=batch, name="Café comprador", price=Decimal("10000.00"), stock=10, attributes={})
     own = Order(customer_user_id=buyer.id, customer_name="Propio", customer_email=buyer.email, customer_phone="3000000000", shipping_address="Calle 1", city="Icononzo", total_amount=Decimal("10000.00"), status="confirmed", items=[OrderItem(product=product, quantity=1, unit_price=Decimal("10000.00"), subtotal=Decimal("10000.00"))])
     foreign = Order(customer_user_id=other.id, customer_name="Ajeno", customer_email=other.email, customer_phone="3000000001", shipping_address="Calle 2", city="Icononzo", total_amount=Decimal("10000.00"), status="confirmed")
@@ -343,7 +303,7 @@ def test_iot_replay_is_idempotent(client_and_session):
     client, session_factory = client_and_session
     session = session_factory()
     producer = _user(session, "iot-producer@example.com", UserRole.PRODUCER)
-    batch = Batch(producer_id=producer.id, status="processing", details={})
+    batch = Batch(product_type="coffee", producer_id=producer.id, status="processing", details={})
     session.add(batch); session.flush()
     device = IoTDevice(device_id="ESP32-REPLAY", batch_id=batch.id, secret_hash=__import__("hashlib").sha256(b"device-token-with-24-characters").hexdigest())
     session.add(device); session.commit(); batch_id = batch.id; session.close()

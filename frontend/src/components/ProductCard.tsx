@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Product } from "@/lib/api";
+import { productCategory } from "@/lib/traceability";
 import { useCart } from "@/context/CartContext";
 import { QrModal } from "@/components/QrModal";
 import {
@@ -27,11 +28,9 @@ export function ProductCard({ product }: ProductCardProps) {
   const [isQrOpen, setIsQrOpen] = useState(false);
   const [justAdded, setJustAdded] = useState(false);
 
-  const isCoffee =
-    product.attributes?.category === "coffee" || product.attributes?.sca_score !== undefined;
-  const isMeat =
-    product.attributes?.category === "cured_meats" ||
-    product.attributes?.temperature_control !== undefined;
+  const category = productCategory(product);
+  const isCoffee = category === "coffee";
+  const isMeat = category === "meat";
 
   const formattedPrice = new Intl.NumberFormat("es-CO", {
     style: "currency",

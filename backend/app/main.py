@@ -4,7 +4,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api.v1.api import api_router
-import app.models  # Asegura que los modelos se carguen para Base.metadata
+import app.modules.registry  # noqa: F401 - registra todos los modelos en Base.metadata
 
 logger = logging.getLogger(__name__)
 

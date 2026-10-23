@@ -25,6 +25,8 @@ export const PERMISSION_LABELS: Record<string, string> = {
   "logistics.write": "Gestión logística",
   "traceability.read": "Consulta de trazabilidad",
   "traceability.write": "Registro de trazabilidad e IoT",
+  "traceability.read_all": "Trazabilidad de todos los productores",
+  "traceability.manage_all": "Gestión de lotes de cualquier productor",
   "blockchain.notarize": "Notarización blockchain",
   "reports.read": "Reportes",
   "catalog.read": "Productos y catálogo",

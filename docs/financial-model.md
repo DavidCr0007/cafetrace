@@ -16,7 +16,7 @@ El margen puede ser negativo y queda en estado `review_required`; no se corrige 
 
 ## Reglas parametrizables
 
-`compensation_rules` permite definir reglas por usuario, rol, categoría (`coffee`/`cured_meats`) y periodo:
+`compensation_rules` permite definir reglas por usuario, rol, categoría (`coffee`/`meat`; las reglas creadas con la etiqueta anterior `cured_meats` deben actualizarse) y periodo:
 
 - `fixed_salary`: salario base mensual.
 - `volume_kg`: pago por kilogramo entregado.

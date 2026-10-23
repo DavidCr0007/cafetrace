@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { Product } from "@/lib/api";
+import { Product, ProductType } from "@/lib/api";
+import { productCategory } from "@/lib/traceability";
 import { ProductCard } from "@/components/ProductCard";
 import Link from "next/link";
 import { CircleAlert, QrCode, Filter } from "lucide-react";
@@ -13,18 +14,9 @@ interface CatalogSectionProps {
 }
 
 export function CatalogSection({ products, isSample, backendOnline }: CatalogSectionProps) {
-  const [selectedCategory, setSelectedCategory] = useState<"all" | "coffee" | "cured_meats">("all");
+  const [selectedCategory, setSelectedCategory] = useState<"all" | ProductType>("all");
 
-  const filteredProducts = products.filter((p) => {
-    if (selectedCategory === "all") return true;
-    if (selectedCategory === "coffee") {
-      return p.attributes?.category === "coffee" || p.attributes?.sca_score !== undefined;
-    }
-    if (selectedCategory === "cured_meats") {
-      return p.attributes?.category === "cured_meats" || p.attributes?.temperature_control !== undefined;
-    }
-    return true;
-  });
+  const filteredProducts = products.filter((p) => selectedCategory === "all" || productCategory(p) === selectedCategory);
 
   return (
     <section className="mx-auto max-w-7xl px-5 pt-16 sm:px-8">
@@ -89,15 +81,15 @@ export function CatalogSection({ products, isSample, backendOnline }: CatalogSec
 
           <button
             type="button"
-            aria-pressed={selectedCategory === "cured_meats"}
-            onClick={() => setSelectedCategory("cured_meats")}
+            aria-pressed={selectedCategory === "meat"}
+            onClick={() => setSelectedCategory("meat")}
             className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
-              selectedCategory === "cured_meats"
+              selectedCategory === "meat"
                 ? "bg-stone-900 text-white shadow-xs"
                 : "text-stone-500 hover:text-stone-800"
             }`}
           >
-            <span>🥩 Cárnicos y Embutidos</span>
+            <span>🥩 Cárnicos</span>
           </button>
         </div>
       </div>

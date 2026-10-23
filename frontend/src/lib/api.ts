@@ -5,7 +5,7 @@ export type JsonValue = string | number | boolean | null | JsonValue[] | { [key:
 export type UserRole = "admin" | "accountant" | "seller" | "producer" | "marketing" | "buyer" | "auditor";
 
 export interface ProductAttributes {
-  category?: "coffee" | "cured_meats" | string;
+  category?: ProductType | "cured_meats" | string;
   sca_score?: number;
   altitude?: number;
   variety?: string;
@@ -67,9 +67,38 @@ export interface AccessProfile { user_id: number; role: UserRole; modules: strin
 export interface AccountingSummary { gross_sales: number; direct_cost: number; producer_payout: number; seller_commission: number; platform_margin: number; settlements: number; review_required: number; }
 export interface WeatherPoint { timestamp: string; temperature_c: number | null; relative_humidity_pct: number | null; precipitation_probability_pct: number | null; precipitation_mm: number | null; wind_speed_kmh: number | null; }
 export interface WeatherForecast { source: string; location: string; latitude: number; longitude: number; timezone: string; generated_at: string; forecast_days: number; data_type: "weather_forecast"; hourly: WeatherPoint[]; }
-// La línea de tiempo es un esquema polimórfico según el tipo de lote. Se mantiene
-// abierta hasta que el backend exponga una unión discriminada por etapa.
-export interface BatchTimelineResponse { batch_id: number; batch_status: string; product: { id: number | null; name: string; category: string; price: number; image_url: string | null }; details: Record<string, any>; stages: Array<Record<string, any>>; notarization: Record<string, any>; }
+export type ProductType = "coffee" | "meat";
+export interface Coordinates { lat: number; lng: number; }
+export interface OriginAttributes { farm: string; municipality?: string; department?: string; vereda?: string; coordinates?: Coordinates; certifications?: string[]; notes?: string; }
+export interface CoffeeAttributes extends OriginAttributes {
+  altitude_masl: number; variety: string; harvest_started_on: string; harvest_ended_on: string;
+  process: "washed" | "natural" | "honey" | "anaerobic";
+  drying_method: "sun_patio" | "raised_beds" | "parabolic_dryer" | "mechanical"; drying_days: number;
+  roast_level: "green" | "light" | "medium" | "medium_dark" | "dark";
+  fermentation_hours?: number; moisture_pct?: number; roast_date?: string; sca_score?: number; cup_notes?: string[];
+}
+export interface MeatAttributes extends OriginAttributes {
+  species: "bovine" | "porcine" | "poultry"; animal_age_months: number;
+  feeding_type: "grass_fed" | "grain_fed" | "mixed" | "free_range";
+  refrigeration_type: "chilled" | "vacuum_chilled" | "frozen";
+  storage_temp_min_c: number; storage_temp_max_c: number; slaughter_date: string;
+  breed?: string; live_weight_kg?: number; carcass_weight_kg?: number; slaughterhouse?: string; sanitary_registry?: string;
+  ica_farm_registry?: string; feed_details?: string; withdrawal_period_respected?: boolean; cut?: string;
+}
+export type BatchCreatePayload =
+  | { product_type: "coffee"; producer_id: number; seller_id?: number; status: string; details: CoffeeAttributes }
+  | { product_type: "meat"; producer_id: number; seller_id?: number; status: string; details: MeatAttributes };
+export interface Notarization { network: string | null; chain_id: number | null; contract_address: string | null; data_hash: string | null; transaction_hash: string | null; block_number: number | null; status: string; is_immutable: boolean; }
+export interface TimelineIoTRecord { id: number; sensor_id: string | null; temperature: number | null; humidity: number | null; timestamp: string | null; }
+// Pasaporte público: solo expone los atributos aptos para consulta sin autenticación.
+export interface BatchTimelineResponse {
+  batch_id: number; batch_status: string; product_type: ProductType; created_at: string | null; producer_name: string | null;
+  product: { id: number | null; name: string; price: number | null; image_url: string | null };
+  origin: Pick<OriginAttributes, "farm" | "vereda" | "municipality" | "department" | "coordinates" | "certifications">;
+  attributes: Partial<CoffeeAttributes> & Partial<MeatAttributes>;
+  iot_records: TimelineIoTRecord[];
+  notarization: Notarization;
+}
 export interface BackendHealth { status: string; message: string; version: string; }
 export interface BackendReadiness { status: "ready"; database: "ok"; }
 export interface BackendDiagnostics {
@@ -85,11 +114,11 @@ export interface UserUpdatePayload { email?: string; full_name?: string; passwor
 export interface AdminUserUpdatePayload { email?: string; full_name?: string; role?: UserRole; is_active?: boolean; }
 export interface AdminUserCreatePayload { email: string; full_name?: string; role: UserRole; password: string; is_active: boolean; }
 export type AccessMatrix = Record<UserRole, string[]>;
-export interface Batch { id: number; producer_id: number; seller_id: number | null; status: string; details: Record<string, JsonValue> | null; created_at: string; updated_at: string | null; }
+export interface Batch { id: number; producer_id: number; seller_id: number | null; product_type: ProductType; status: string; details: (Partial<CoffeeAttributes> & Partial<MeatAttributes>) | null; created_at: string; updated_at: string | null; }
 export interface IoTDevice { device_id: string; batch_id: number | null; is_active: boolean; last_seen_at: string | null; }
 export interface ShipmentPayload { carrier?: string; tracking_number?: string; status: string; cold_chain_required?: boolean; last_temperature_c?: number; }
 
-interface ValidationIssue { msg?: string; }
+interface ValidationIssue { msg?: string; loc?: Array<string | number>; }
 
 class ApiError extends Error {
   constructor(message: string, readonly status: number) {
@@ -101,7 +130,10 @@ class ApiError extends Error {
 function apiErrorMessage(payload: { detail?: string | ValidationIssue[] } | null, status: number): string {
   if (typeof payload?.detail === "string") return payload.detail;
   if (Array.isArray(payload?.detail)) {
-    const messages = payload.detail.map((issue) => issue.msg).filter(Boolean);
+    const messages = payload.detail.map((issue) => {
+      const field = issue.loc?.filter((part) => !["body", "details", "coffee", "meat"].includes(String(part))).join(".");
+      return field && issue.msg ? `${field}: ${issue.msg}` : issue.msg;
+    }).filter(Boolean);
     if (messages.length) return messages.join(" · ");
   }
   return `La solicitud falló con estado ${status}`;
@@ -165,7 +197,7 @@ export function getOrders(token: string) { return authenticatedRequest<OrderResp
 export function updateOrderStatus(token: string, orderId: number, status: string) { return authenticatedRequest<OrderResponse>(`/orders/${orderId}/status`, token, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) }); }
 export function updateShipment(token: string, orderId: number, payload: ShipmentPayload) { return authenticatedRequest<Record<string, JsonValue>>(`/operations/orders/${orderId}/shipment`, token, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }); }
 export function getBatches(token: string) { return authenticatedRequest<Batch[]>("/batches/", token); }
-export function createBatch(token: string, payload: { producer_id: number; seller_id?: number; status: string; details?: Record<string, JsonValue> }) { return authenticatedRequest<Batch>("/batches/", token, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }); }
+export function createBatch(token: string, payload: BatchCreatePayload) { return authenticatedRequest<Batch>("/batches/", token, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }); }
 export function updateBatch(token: string, batchId: number, payload: { seller_id?: number; status?: string; details?: Record<string, JsonValue> }) { return authenticatedRequest<Batch>(`/batches/${batchId}`, token, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }); }
 export function createTraceabilityRecord(token: string, batchId: number, payload: { record_type: "manual"; data: Record<string, JsonValue> }) { return authenticatedRequest<Record<string, JsonValue>>(`/batches/${batchId}/records`, token, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ batch_id: batchId, ...payload }) }); }
 export function getIoTDevices(token: string) { return authenticatedRequest<IoTDevice[]>("/iot/devices", token); }

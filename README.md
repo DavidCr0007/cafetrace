@@ -1,15 +1,57 @@
 # CaféTrace IA
 
-Plataforma de trazabilidad agrícola, comercio electrónico, IoT, blockchain y liquidaciones comerciales para café y cárnicos del Huila.
+Plataforma de trazabilidad agrícola, comercio electrónico, IoT, blockchain y liquidaciones comerciales para café y cárnicos de las fincas de Icononzo, Tolima.
 
 ## Componentes
 
-- `backend/`: API FastAPI, autenticación, RBAC, usuarios, pedidos, logística, contabilidad, IoT y migraciones.
+- `backend/`: API FastAPI organizada por dominios en `app/modules/` (ver abajo), migraciones y pruebas.
 - `frontend/`: aplicación web Next.js, catálogo, trazabilidad y dashboard por rol.
 - `blockchain/`: contrato Solidity para notarización en Polygon Amoy.
 - `docs/`: modelos de acceso, seguridad, arquitectura y finanzas.
 - `ops/`: PostgreSQL local aislado, respaldos y utilidades operativas.
 - `loadtests/`: escenario base de Locust.
+
+## Estructura del backend
+
+```text
+backend/app/
+├── core/          # configuración, base de datos, seguridad y rate limit
+├── api/v1/api.py  # composición de routers; las rutas públicas no cambian
+└── modules/
+    ├── identity/      # usuarios, sesiones, autenticación y RBAC (permissions.py)
+    ├── audit/         # eventos de auditoría y vistas de supervisión (/admin/summary, /admin/audit-events)
+    ├── traceability/  # lotes tipados café/cárnicos (attributes.py), registros e IoT
+    ├── blockchain/    # hash canónico, notarización y verificación en Polygon
+    ├── catalog/       # productos
+    ├── orders/        # pedidos y ámbito por rol (service.py)
+    ├── payments/      # intención de pago
+    ├── logistics/     # despachos y cadena de frío
+    ├── accounting/    # reglas, liquidaciones y nómina
+    ├── insights/      # pronóstico del clima y baseline de calidad
+    └── registry.py    # carga todos los modelos para Alembic y las relaciones
+```
+
+Cada módulo agrupa `models.py`, `schemas.py`, su router y, si aplica, `service.py`.
+
+## Trazabilidad tipada
+
+Todo lote declara `product_type` (`coffee` o `meat`), inmutable tras su creación.
+`details` se valida contra un esquema por tipo con núcleo obligatorio, extras
+opcionales declarados y rechazo de claves desconocidas, para que el hash
+notarizado sea predecible:
+
+- **Café:** finca, altitud (msnm), variedad, inicio y fin de cosecha, proceso,
+  método y días de secado, tipo de tostado. Opcionales: fermentación, humedad,
+  fecha de tostión, puntaje SCA (un decimal) y notas de taza.
+- **Cárnicos:** finca, especie (bovino, porcino, avícola), edad en meses,
+  alimentación, tipo de refrigeración, rango de temperatura y fecha de
+  sacrificio. Se exige coherencia de cadena de frío: refrigerado entre −2 °C y
+  4 °C, congelado con máxima ≤ −18 °C.
+
+El origen toma por defecto Icononzo, Tolima. Tras notarizar un lote, sus
+atributos no pueden modificarse (`409`). El pasaporte público
+(`/batches/{id}/timeline`) solo expone los atributos aptos para consulta
+anónima; notas internas y registros ICA quedan fuera.
 
 ## Requisitos
 
@@ -114,6 +156,12 @@ alembic upgrade head
 alembic check
 pytest -q
 ```
+
+Las pruebas eliminan y recrean todas las tablas, por eso nunca usan la base de
+desarrollo: por defecto se conectan a `<base>_test` en el mismo servidor
+(`ops/dev-db.sh start` la crea junto con la principal). Para otra base, define
+`TEST_DATABASE_URL`. El fixture aborta la sesión si el nombre de la base no
+termina en `_test` o `_ci`.
 
 Desde `frontend/`:
 

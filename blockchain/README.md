@@ -15,7 +15,7 @@ Este módulo contiene la lógica de contratos inteligentes en Solidity para la n
 
 ## Interacción con FastAPI
 
-El backend en Python (`app/core/blockchain.py`) genera el digest determinista del lote. La notarización real solo se habilita cuando `BLOCKCHAIN_ENABLED=true` y están configurados un RPC, la dirección del contrato y una clave privada de envío en el entorno del backend.
+El backend en Python (`app/modules/blockchain/service.py`) genera el digest determinista del lote. El formato canónico (versión 2) serializa `schema_version`, `batch_id`, `product_type` y los atributos normalizados con claves ordenadas. El puntaje SCA se envía al contrato multiplicado por 10 (88.5 → 885), como documenta `CafeTraceRegistry.sol`. Para cárnicos, el campo `variety` del contrato lleva la especie. La notarización real solo se habilita cuando `BLOCKCHAIN_ENABLED=true` y están configurados un RPC, la dirección del contrato y una clave privada de envío en el entorno del backend.
 
 Con Web3 configurado, el servicio firma y envía la transacción, espera las confirmaciones configuradas, persiste el hash real y verifica el digest contra el contrato. Sin esa configuración, la API no simula una prueba blockchain: la operación responde como no disponible (`503`) y el lote conserva su estado pendiente.
 

@@ -11,17 +11,17 @@ export const dynamic = "force-dynamic";
 
 const sampleProducts: Product[] = [
   {
-    id: 1, batch_id: 1, seller_id: null, name: "Café Geisha · muestra de interfaz",
+    id: 1, batch_id: 1, seller_id: null, name: "Café de altura Icononzo · muestra de interfaz",
     description: "Producto ilustrativo para revisar el catálogo cuando el modo demo está activado.",
     price: 180000, stock: 45,
-    attributes: { category: "coffee", sca_score: 88.5, altitude: 1850, variety: "Geisha", process_method: "Anaeróbico 48h", cup_profile: ["Jazmín", "Durazno", "Miel"] },
+    attributes: { category: "coffee", altitude: 1650, variety: "Castillo", process_method: "Lavado" },
     image_url: null, created_at: new Date().toISOString(), updated_at: null,
   },
   {
-    id: 2, batch_id: 2, seller_id: null, name: "Chorizo artesanal · muestra de interfaz",
+    id: 2, batch_id: 2, seller_id: null, name: "Lomo de res de pastoreo · muestra de interfaz",
     description: "Referencia ilustrativa para validar productos con control de temperatura.",
     price: 38000, stock: 30,
-    attributes: { category: "cured_meats", temperature_control: "2 °C – 4 °C", sanitary_registry: "DEMO-NO-VÁLIDO" },
+    attributes: { category: "meat", temperature_control: "0 °C – 4 °C" },
     image_url: null, created_at: new Date().toISOString(), updated_at: null,
   },
 ];

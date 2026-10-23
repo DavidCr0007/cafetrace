@@ -16,9 +16,16 @@
 
 ## Roles
 
-`admin` tiene todos los permisos. `accountant` gestiona contabilidad y consulta operación financiera. `seller` gestiona su catálogo comercial, pedidos asignados y despachos. `producer` gestiona sus lotes, productos, IoT y notarizaciones. `marketing` consulta trazabilidad/catálogo y gestiona acciones comerciales. `buyer` compra, consulta sus pedidos y gestiona su perfil. `auditor` tiene acceso de solo lectura a usuarios, reportes, logística, trazabilidad y auditoría. El rol legado `customer` se migra a `buyer` y ya no puede asignarse.
+`admin` tiene todos los permisos. `accountant` gestiona contabilidad y consulta operación financiera. `seller` gestiona su catálogo comercial, pedidos asignados y despachos. `producer` gestiona sus lotes, productos, IoT y notarizaciones, y puede vender directamente: si un producto no tiene vendedor asignado, el productor queda como responsable comercial y gestiona sus pedidos y despachos. `marketing` consulta trazabilidad/catálogo y gestiona acciones comerciales. `buyer` compra, consulta sus pedidos y gestiona su perfil. `auditor` tiene acceso de solo lectura a usuarios, reportes, logística, trazabilidad y auditoría. El rol legado `customer` se migra a `buyer` y ya no puede asignarse.
 
-La matriz ejecutable está en `backend/app/core/permissions.py` y puede consultarse por un administrador mediante `GET /api/v1/admin/access-matrix`. Cada usuario autenticado puede consultar sus permisos efectivos en `GET /api/v1/users/me/access`. Todos los perfiles tienen `dashboard.read`; el resumen global de operación usa el permiso adicional `dashboard.summary.read` y no se expone a compradores.
+La matriz ejecutable está en `backend/app/modules/identity/permissions.py` y puede consultarse por un administrador mediante `GET /api/v1/admin/access-matrix`. Cada usuario autenticado puede consultar sus permisos efectivos en `GET /api/v1/users/me/access`. Todos los perfiles tienen `dashboard.read`; el resumen global de operación usa el permiso adicional `dashboard.summary.read` y no se expone a compradores.
+
+Los permisos de ámbito sustituyen las comprobaciones por nombre de rol:
+
+- `traceability.read_all` (admin, auditor, marketing): consulta lotes de cualquier productor; sin él, solo los propios.
+- `traceability.manage_all` (solo admin): modifica, notariza o registra evidencia sobre lotes ajenos.
+- Pedidos: el ámbito se resuelve en `orders/service.py`. Supervisión (admin, contador, auditor) ve todo; el comprador ve sus pedidos; vendedor y productor ven los pedidos donde son responsables comerciales. Un rol no contemplado no ve nada.
+- Los recursos fuera de ámbito responden `404` para no revelar su existencia.
 
 ## Recuperación de acceso
 

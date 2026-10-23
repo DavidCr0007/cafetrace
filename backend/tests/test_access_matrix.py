@@ -1,8 +1,8 @@
 import pytest
 
-from app.core.permissions import Permission, ROLE_PERMISSIONS, has_permission, require_permission
-from app.models.user import User, UserRole
-from app.schemas.user import PasswordResetApproval, UserCreate
+from app.modules.identity.permissions import Permission, ROLE_PERMISSIONS, has_permission, require_permission
+from app.modules.identity.models import User, UserRole
+from app.modules.identity.schemas import PasswordResetApproval, UserCreate
 
 
 def user_with_role(role: UserRole) -> User:

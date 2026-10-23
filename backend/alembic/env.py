@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from app.core.config import settings
 from app.core.database import Base
-import app.models  # load all models for metadata detection
+import app.modules.registry  # noqa: F401 - registra todos los modelos en Base.metadata
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

@@ -45,8 +45,8 @@ export function CartDrawer() {
     email: "",
     phone: "",
     address: "",
-    city: "Pitalito",
-    department: "Huila",
+    city: "Icononzo",
+    department: "Tolima",
     payment_method: "contra_entrega",
     notes: "",
   });
@@ -155,7 +155,7 @@ export function CartDrawer() {
                 Orden #{orderCompleted.id} Registrada
               </h3>
               <p className="text-xs text-stone-500 mt-2 max-w-xs leading-relaxed">
-                Hemos enviado la confirmación a <strong>{orderCompleted.customer_email}</strong>. Tu pedido se despachará directamente desde el Huila.
+                Hemos enviado la confirmación a <strong>{orderCompleted.customer_email}</strong>. Tu pedido se despachará directamente desde Icononzo, Tolima.
               </p>
 
               <div className="w-full bg-stone-50 rounded-2xl p-4 border border-stone-200 mt-6 text-left text-xs space-y-2">
@@ -197,7 +197,7 @@ export function CartDrawer() {
                 <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl flex items-start gap-2 text-xs text-amber-900">
                   <Truck className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
                   <span>
-                    Despacho directo desde origen (Huila). Sin intermediarios para garantizar frescura y precio justo.
+                    Despacho directo desde origen (Icononzo, Tolima). Sin intermediarios para garantizar frescura y precio justo.
                   </span>
                 </div>
 
@@ -344,7 +344,7 @@ export function CartDrawer() {
                   <ShoppingBag className="w-12 h-12 text-stone-300 mb-3" />
                   <h4 className="text-base font-bold text-stone-800">Tu carrito está vacío</h4>
                   <p className="text-xs text-stone-400 mt-1 max-w-xs">
-                    Descubre café de especialidad y cárnicos certificados cultivados y producidos en el Huila.
+                    Descubre café de especialidad y cárnicos certificados cultivados y producidos en Icononzo, Tolima.
                   </p>
                   <button
                     onClick={closeCart}
@@ -437,7 +437,7 @@ export function CartDrawer() {
                       <span className="font-semibold text-stone-800">{formattedTotal}</span>
                     </div>
                     <div className="flex justify-between text-stone-500">
-                      <span>Envío Huila / Nacional:</span>
+                      <span>Envío Icononzo / Tolima / Nacional:</span>
                       <span className="text-emerald-700 font-bold">¡Gratis por lanzamiento!</span>
                     </div>
                     <div className="flex justify-between text-sm font-black text-stone-900 pt-2 border-t border-stone-200">

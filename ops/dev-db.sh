@@ -89,11 +89,15 @@ start_cluster() {
   fi
   pg_ctl -D "$DATA_DIR" -l "$LOG_FILE" -o "-h 127.0.0.1 -p $PORT -k $SOCKET_DIR" start >/dev/null
   wait_until_ready
-  if ! PGPASSWORD="$DB_PASSWORD" psql -h 127.0.0.1 -p "$PORT" -U "$DB_USER" -d postgres -tAc \
-    "SELECT 1 FROM pg_database WHERE datname = '$DB_NAME'" | grep -qx 1; then
-    PGPASSWORD="$DB_PASSWORD" createdb -h 127.0.0.1 -p "$PORT" -U "$DB_USER" -O "$DB_USER" "$DB_NAME"
-  fi
-  printf 'PostgreSQL local listo: postgresql://%s:***@127.0.0.1:%s/%s\n' "$DB_USER" "$PORT" "$DB_NAME"
+  # La base `<nombre>_test` es la que usa pytest por defecto; nunca la de desarrollo.
+  local database_name
+  for database_name in "$DB_NAME" "${DB_NAME}_test"; do
+    if ! PGPASSWORD="$DB_PASSWORD" psql -h 127.0.0.1 -p "$PORT" -U "$DB_USER" -d postgres -tAc \
+      "SELECT 1 FROM pg_database WHERE datname = '$database_name'" | grep -qx 1; then
+      PGPASSWORD="$DB_PASSWORD" createdb -h 127.0.0.1 -p "$PORT" -U "$DB_USER" -O "$DB_USER" "$database_name"
+    fi
+  done
+  printf 'PostgreSQL local listo: postgresql://%s:***@127.0.0.1:%s/%s (pruebas: %s_test)\n' "$DB_USER" "$PORT" "$DB_NAME" "$DB_NAME"
 }
 
 stop_cluster() {

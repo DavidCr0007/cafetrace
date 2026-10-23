@@ -1,9 +1,9 @@
-from app.api.v1.endpoints.auth import LoginJSON
+from app.modules.identity.auth import LoginJSON
 import pytest
 from app.core.config import Settings, settings
-from app.schemas.order import OrderCreate
-from app.core.blockchain import compute_batch_data_hash
-from app.schemas.traceability import IoTIngest
+from app.modules.orders.schemas import OrderCreate
+from app.modules.blockchain.service import compute_batch_data_hash
+from app.modules.traceability.schemas import IoTIngest
 from datetime import datetime, timezone
 from pydantic import ValidationError
 from app.main import app
@@ -32,8 +32,8 @@ def test_login_schema_uses_email():
 
 
 def test_blockchain_hash_is_deterministic():
-    first = compute_batch_data_hash(7, {"origin": "Icononzo", "variety": "Caturra"}, 86.5)
-    second = compute_batch_data_hash(7, {"variety": "Caturra", "origin": "Icononzo"}, 86.5)
+    first = compute_batch_data_hash(7, "coffee", {"municipality": "Icononzo", "variety": "Caturra"})
+    second = compute_batch_data_hash(7, "coffee", {"variety": "Caturra", "municipality": "Icononzo"})
     assert first == second and first.startswith("0x")
 
 
